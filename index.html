@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>NSH Box Scanner</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{--bg:#0f1513;--surface:#18211e;--ink:#e4ece8;--muted:#97a6a0;--line:#2b3733;--accent:#3fbf9b;--accent-ink:#06231b;--warn:#f0b35a;--bad:#f08a8a;--bad-soft:#3a1b1b;
+--display:"Archivo",system-ui,sans-serif;--body:"Public Sans",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px}
+.wrap{max-width:720px;margin:0 auto;padding:max(12px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) 40px max(14px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:12px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+h1{font:800 1.15rem var(--display);margin:0}
+.cam{position:relative;border-radius:14px;overflow:hidden;background:#000;aspect-ratio:3/4;max-height:55vh;width:100%}
+.cam video{width:100%;height:100%;object-fit:cover;display:block}
+.cam .aim{position:absolute;inset:18% 12%;border:2px solid rgba(255,255,255,.55);border-radius:12px;pointer-events:none;transition:border-color .1s,box-shadow .1s}
+.cam.hit .aim{border-color:var(--accent);box-shadow:0 0 0 9999px rgba(63,191,155,.22)}
+.cam.dup .aim{border-color:var(--warn)}
+.cam .msg{position:absolute;left:10px;right:10px;bottom:10px;background:rgba(0,0,0,.65);padding:8px 10px;border-radius:10px;font:500 .9rem var(--mono);text-align:center}
+.cam .idle{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:var(--muted);text-align:center;padding:20px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.btn{appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:600 .95rem var(--body);padding:12px 14px;border-radius:10px;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);flex:1}
+.btn.danger{border-color:var(--bad);color:var(--bad);background:var(--bad-soft)}
+.btn:disabled{opacity:.45}
+.tally{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.t{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px}
+.t b{display:block;font:800 2rem var(--display);font-variant-numeric:tabular-nums;line-height:1.05}
+.t span{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.t input{width:100%;font:800 2rem var(--display);background:transparent;border:0;border-bottom:1px dashed var(--line);color:var(--ink);padding:0}
+.t.ok b{color:var(--accent)} .t.miss b{color:var(--warn)}
+.lot{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.lot-h{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.lot-h .n{font:800 1.8rem var(--display)}
+.name{width:100%;font:600 1rem var(--body);background:transparent;color:var(--ink);border:0;border-bottom:1px dashed var(--line);padding:2px 0}
+.facts{font-size:.82rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 12px}
+.facts b{font-family:var(--mono);font-weight:500;color:var(--ink)}
+.exp-warn{color:var(--warn)} .exp-bad{color:var(--bad)}
+ul{list-style:none;margin:0;padding:0}
+.ser li{display:flex;justify-content:space-between;align-items:center;font:.86rem var(--mono);padding:5px 0;border-top:1px solid var(--line)}
+.ser li button{border:0;background:none;color:var(--bad);font:600 .8rem var(--body);padding:4px 6px;cursor:pointer}
+.confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.note{font-size:.82rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><h1>NSH Box Scanner</h1><button class="btn" id="torch" hidden>Light</button></div>
+
+  <div class="cam" id="cam">
+    <video id="v" playsinline muted></video>
+    <div class="aim"></div>
+    <div class="idle" id="idle">Tap <b>Start scanning</b>, then move the phone slowly over the boxes.<br>Each new box beeps once.</div>
+    <div class="msg" id="msg" hidden></div>
+  </div>
+
+  <div class="row">
+    <button class="btn primary" id="startBtn">Start scanning</button>
+    <button class="btn" id="undoBtn" disabled>Undo last</button>
+  </div>
+
+  <div class="tally">
+    <div class="t"><span>Scanned</span><b id="nScan">0</b></div>
+    <div class="t"><span>Boxes counted by hand</span><input id="expect" type="number" inputmode="numeric" min="0" placeholder="–"></div>
+    <div class="t" id="diffBox"><span id="diffLbl">Difference</span><b id="diff">–</b></div>
+  </div>
+
+  <div class="row">
+    <button class="btn" id="xlsBtn" disabled>Save Excel</button>
+    <button class="btn danger" id="clearBtn" disabled>New count</button>
+  </div>
+  <div class="confirm" id="clearConfirm" hidden><span>Delete all scanned boxes?</span><button class="btn danger" id="clearYes">Delete all</button><button class="btn" id="clearNo">Keep</button></div>
+
+  <div id="lots" style="display:flex;flex-direction:column;gap:10px"></div>
+  <p class="note">Scans and product names are kept on this phone until you tap New count.</p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.4/dist/iife/reader/index.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const S={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+let items=S.get('ls_items',[]), names=S.get('ls_names',{});
+const save=()=>S.set('ls_items',items);
+
+function parseGS1(t){
+  const o={};
+  if(t[0]==='('){const re=/\((\d{2,4})\)([^()]*)/g;let m;while((m=re.exec(t)))o[m[1]]=m[2];}
+  else{let s=t.replace(/^\]d2|^\]C1/,'');const GS='\x1d',fx={'01':14,'17':6,'11':6,'15':6,'13':6};
+    while(s.length>=2){if(s[0]===GS){s=s.slice(1);continue}const ai=s.slice(0,2);
+      if(fx[ai]){o[ai]=s.slice(2,2+fx[ai]);s=s.slice(2+fx[ai])}
+      else if(ai==='10'||ai==='21'){const e=s.indexOf(GS,2);o[ai]=e<0?s.slice(2):s.slice(2,e);s=e<0?'':s.slice(e+1)}else break;}}
+  return {gtin:o['01']||'',serial:o['21']||'',expiry:o['17']||'',batch:o['10']||'',raw:t};
+}
+const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function expD(e){if(!/^\d{6}$/.test(e))return null;let y=2000+ +e.slice(0,2),m=+e.slice(2,4),d=+e.slice(4,6);if(!d)d=new Date(y,m,0).getDate();return new Date(y,m-1,d)}
+function fmtExp(e){const d=expD(e);return d?String(d.getDate()).padStart(2,'0')+'-'+MON[d.getMonth()]+'-'+d.getFullYear():(e||'—')}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// ---------- sound ----------
+let ac=null;
+function tone(f,ms,vol=.25){try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator(),g=ac.createGain();o.frequency.value=f;o.type='square';g.gain.value=vol;o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+ms/1000)}catch(e){}}
+const beepNew=()=>{tone(1760,110);try{navigator.vibrate&&navigator.vibrate(60)}catch(e){}};
+const beepDup=()=>tone(440,60,.12);
+
+// ---------- render ----------
+function render(){
+  $('nScan').textContent=items.length;
+  const ex=parseInt($('expect').value,10);
+  const db=$('diffBox'); db.className='t';
+  if(isNaN(ex)){$('diff').textContent='–';$('diffLbl').textContent='Difference'}
+  else{const d=ex-items.length;
+    if(d===0){$('diff').textContent='✓';$('diffLbl').textContent='Matches';db.className='t ok'}
+    else if(d>0){$('diff').textContent=d;$('diffLbl').textContent='Not yet scanned';db.className='t miss'}
+    else{$('diff').textContent='+'+(-d);$('diffLbl').textContent='More than hand count';db.className='t miss'}}
+  $('undoBtn').disabled=!items.length;$('xlsBtn').disabled=!items.length;$('clearBtn').disabled=!items.length;
+  const g=new Map();for(const it of items){const k=it.gtin+'|'+it.batch+'|'+it.expiry;if(!g.has(k))g.set(k,[]);g.get(k).push(it)}
+  $('lots').innerHTML=[...g.entries()].map(([k,l])=>{const it=l[0],d=expD(it.expiry),mo=d?(d-new Date())/2.63e9:99;
+    const ec=mo<0?'exp-bad':mo<6?'exp-warn':'';
+    return `<div class="lot"><div class="lot-h"><div style="flex:1;min-width:0">
+      <input class="name" data-gtin="${esc(it.gtin)}" placeholder="Type product name" value="${esc(names[it.gtin]||'')}">
+      <div class="facts"><span>GTIN <b>${esc(it.gtin)}</b></span><span>Batch <b>${esc(it.batch||'—')}</b></span><span class="${ec}">Exp <b class="${ec}">${esc(fmtExp(it.expiry))}</b>${mo<0?' EXPIRED':mo<6?' (under 6 months)':''}</span></div>
+      </div><div class="n">${l.length}</div></div>
+      <ul class="ser">${l.map(x=>`<li><span>${esc(x.serial||x.raw)}</span><button data-raw="${esc(x.raw)}">✕ Delete</button></li>`).join('')}</ul></div>`}).join('');
+}
+$('lots').addEventListener('input',e=>{if(e.target.dataset.gtin!==undefined){names[e.target.dataset.gtin]=e.target.value;S.set('ls_names',names)}});
+$('lots').addEventListener('click',e=>{const b=e.target.closest('button[data-raw]');if(!b)return;items=items.filter(x=>x.raw!==b.dataset.raw);save();render()});
+$('expect').addEventListener('input',render);
+$('undoBtn').onclick=()=>{const x=items.pop();save();render();flash('Removed '+(x?x.serial:''),'')};
+$('clearBtn').onclick=()=>$('clearConfirm').hidden=false;
+$('clearNo').onclick=()=>$('clearConfirm').hidden=true;
+$('clearYes').onclick=()=>{items=[];save();$('expect').value='';$('clearConfirm').hidden=true;render()};
+
+// ---------- excel ----------
+$('xlsBtn').onclick=()=>{
+  const g={};for(const x of items){const k=x.gtin+'|'+x.batch+'|'+x.expiry;g[k]=(g[k]||0)+1}
+  const sum=[['Product','GTIN','Batch','Expiry','Qty']];
+  for(const [k,n] of Object.entries(g)){const [gt,b,e]=k.split('|');sum.push([names[gt]||'',gt,b,fmtExp(e),n])}
+  sum.push(['','','','Total',items.length]);
+  const det=[['Product','GTIN','Batch','Expiry','Serial','Scanned at']].concat(items.map(x=>[names[x.gtin]||'',x.gtin,x.batch,fmtExp(x.expiry),x.serial,x.at||'']));
+  const wb=XLSX.utils.book_new();
+  const ws1=XLSX.utils.aoa_to_sheet(sum),ws2=XLSX.utils.aoa_to_sheet(det);
+  ws1['!cols']=[{wch:30},{wch:16},{wch:12},{wch:13},{wch:6}];ws2['!cols']=[{wch:30},{wch:16},{wch:12},{wch:13},{wch:18},{wch:20}];
+  XLSX.utils.book_append_sheet(wb,ws1,'Summary');XLSX.utils.book_append_sheet(wb,ws2,'Serials');
+  const d=new Date(),st=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+'_'+String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0');
+  XLSX.writeFile(wb,'Box_Count_'+st+'.xlsx');
+};
+
+// ---------- camera + decode loop ----------
+let stream=null,running=false,reader=null,track=null,torchOn=false;
+const v=$('v'),cv=document.createElement('canvas'),cx=cv.getContext('2d',{willReadFrequently:true});
+let msgT=null;
+function flash(text,cls){const c=$('cam');c.classList.remove('hit','dup');if(cls)c.classList.add(cls);const m=$('msg');m.hidden=false;m.textContent=text;clearTimeout(msgT);msgT=setTimeout(()=>{c.classList.remove('hit','dup')},350)}
+const lastSeen=new Map();
+async function loop(){
+  if(!running)return;
+  if(v.readyState>=2){
+    const vw=v.videoWidth,vh=v.videoHeight;
+    // decode the aim area (center) at full sensor resolution
+    const x=Math.round(vw*.08),y=Math.round(vh*.14),w=vw-2*x,h=vh-2*y;
+    cv.width=w;cv.height=h;cx.drawImage(v,x,y,w,h,0,0,w,h);
+    try{
+      const rs=await reader(cx.getImageData(0,0,w,h),{formats:['DataMatrix','QRCode'],tryHarder:true,tryInvert:true,tryRotate:true,maxNumberOfSymbols:6,textMode:'HRI'});
+      const now=Date.now();
+      for(const r of rs){ if(!r.isValid||!r.text)continue;
+        const t=r.text; const seen=lastSeen.get(t); lastSeen.set(t,now);
+        if(items.some(i=>i.raw===t)){ if(!seen||now-seen>1500){beepDup();flash('Already counted · '+parseGS1(t).serial,'dup')} continue; }
+        const p=parseGS1(t);p.at=new Date().toLocaleString();items.push(p);save();render();
+        beepNew();flash('Added #'+items.length+' · '+p.serial,'hit');
+      }
+    }catch(e){}
+  }
+  requestAnimationFrame(loop);
+}
+async function start(){
+  $('startBtn').disabled=true;$('startBtn').textContent='Starting…';
+  try{
+    // unlock audio on the tap
+    tone(1,1,0);
+    if(!reader){ZXingWASM.prepareZXingModule({overrides:{locateFile:(p,pre)=>p.endsWith('.wasm')?'https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.4/dist/reader/zxing_reader.wasm':pre+p},fireImmediately:true});reader=ZXingWASM.readBarcodes}
+    stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080},focusMode:'continuous'}});
+    v.srcObject=stream;await v.play();
+    track=stream.getVideoTracks()[0];
+    try{const caps=track.getCapabilities&&track.getCapabilities();if(caps&&caps.torch)$('torch').hidden=false;
+        if(caps&&caps.focusMode&&caps.focusMode.includes('continuous'))await track.applyConstraints({advanced:[{focusMode:'continuous'}]})}catch(e){}
+    $('idle').hidden=true;running=true;$('startBtn').disabled=false;$('startBtn').textContent='Stop';
+    $('msg').hidden=false;$('msg').textContent='Point at a box code';
+    try{await navigator.wakeLock?.request('screen')}catch(e){}
+    loop();
+  }catch(e){
+    $('startBtn').disabled=false;$('startBtn').textContent='Start scanning';
+    $('idle').hidden=false;$('idle').innerHTML='Camera could not start.<br>Allow camera access for this page in the browser settings, then try again.<br><small>'+esc(e.name||e)+'</small>';
+  }
+}
+function stop(){running=false;try{stream&&stream.getTracks().forEach(t=>t.stop())}catch(e){}stream=null;$('torch').hidden=true;torchOn=false;
+  $('startBtn').textContent='Start scanning';$('idle').hidden=false;$('msg').hidden=true}
+$('startBtn').onclick=()=>running?stop():start();
+$('torch').onclick=async()=>{try{torchOn=!torchOn;await track.applyConstraints({advanced:[{torch:torchOn}]});$('torch').textContent=torchOn?'Light off':'Light'}catch(e){}};
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&running)stop()});
+render();
+</script>
+</body>
+</html>
