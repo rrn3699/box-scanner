@@ -81,7 +81,7 @@ ul{list-style:none;margin:0;padding:0}
   <section id="mapView" hidden style="display:flex;flex-direction:column;gap:10px">
     <p class="note" style="margin:0">Scan the AMSP sticker QR on a box, then the box's printed code (GTIN). Either order works. The pair saves when both are read.</p>
     <div class="pair">
-      <div class="slot" id="slotA"><span>AMSP product (sticker)</span><b id="valA">–</b></div>
+      <div class="slot" id="slotA"><span>AMSP prcode (sticker)</span><b id="valA">–</b></div>
       <div class="slot" id="slotG"><span>GTIN (box code)</span><b id="valG">–</b></div>
     </div>
     <div class="warnbox" id="mapWarn" hidden></div>
@@ -197,19 +197,25 @@ function renderMap(){
   $('valA').textContent=cur.amsp||'–';$('valG').textContent=cur.gtin||'–';
   $('slotA').classList.toggle('done',!!cur.amsp);$('slotG').classList.toggle('done',!!cur.gtin);
   $('nMap').textContent=maps.length;$('mapXls').disabled=!maps.length;$('mapClear').disabled=!maps.length;
-  $('mapList').innerHTML=maps.slice().reverse().map(m=>`<li><span class="k">AMSP ${esc(m.amsp)} → GTIN ${esc(m.gtin)}</span><span class="m">${esc(m.at)}</span><button data-g="${esc(m.gtin)}">✕ Delete</button></li>`).join('');}
+  $('mapList').innerHTML=maps.slice().reverse().map(m=>`<li><span class="k">prcode ${esc(m.amsp)} → GTIN ${esc(m.gtin)}</span><span class="m">${esc(m.at)}</span><button data-g="${esc(m.gtin)}">✕ Delete</button></li>`).join('');}
 function warn(t){const w=$('mapWarn');if(!t){w.hidden=true;return}w.hidden=false;w.textContent=t;}
 function tryPair(){
   if(!cur.amsp||!cur.gtin)return;
   const ex=maps.find(m=>m.gtin===cur.gtin);
   if(ex&&ex.amsp===cur.amsp){beepDup();flash('Already mapped','dup');warn('');cur={amsp:'',gtin:''};renderMap();return}
-  if(ex){tone(220,400,.3);warn(`GTIN ${cur.gtin} is already mapped to AMSP ${ex.amsp}. Scanned sticker says ${cur.amsp}. Check the box. Delete the old pair below if the new one is correct.`);cur={amsp:'',gtin:''};renderMap();return}
+  if(ex){tone(220,400,.3);warn(`GTIN ${cur.gtin} is already mapped to prcode ${ex.amsp}. This sticker says ${cur.amsp}. Check the box. Delete the old pair below if the new one is correct.`);cur={amsp:'',gtin:''};renderMap();return}
   maps.push({amsp:cur.amsp,gtin:cur.gtin,at:new Date().toLocaleString()});saveMaps();
-  beepNew();setTimeout(beepNew,150);flash('Mapped AMSP '+cur.amsp+' → '+cur.gtin,'hit');warn('');cur={amsp:'',gtin:''};renderMap();}
+  beepNew();setTimeout(beepNew,150);flash('Mapped prcode '+cur.amsp+' → '+cur.gtin,'hit');warn('');cur={amsp:'',gtin:''};renderMap();}
 function onMapCode(t){
-  const p=parseGS1(t);
-  if(p.gtin){ if(cur.gtin===p.gtin)return; cur.gtin=p.gtin; beepNew(); flash('GTIN '+p.gtin+(cur.amsp?'':' · now scan sticker'),'hit'); }
-  else { const v=t.trim(); if(cur.amsp===v)return; cur.amsp=v; beepNew(); flash('AMSP '+v+(cur.gtin?'':' · now scan box code'),'hit'); }
+  const raw=t.trim(), p=parseGS1(raw);
+  let gtin=p.gtin;
+  if(!gtin && /^(\d{8}|\d{12}|\d{13})$/.test(raw)) gtin=raw.padStart(14,'0'); // plain EAN/UPC box barcode
+  if(raw.includes('//')){ // AMSP sticker: prcode//...//expiry -> keep prcode only
+    const v=raw.split('//')[0].trim();
+    if(!/^\d+$/.test(v)){ flash('Sticker not readable: '+raw,'dup'); return; }
+    if(cur.amsp===v)return; cur.amsp=v; beepNew(); flash('AMSP prcode '+v+(cur.gtin?'':' · now scan box code'),'hit');
+  } else if(gtin){ if(cur.gtin===gtin)return; cur.gtin=gtin; beepNew(); flash('GTIN '+gtin+(cur.amsp?'':' · now scan sticker'),'hit'); }
+  else { flash('Not a sticker or box code · ignored','dup'); return; }
   renderMap(); tryPair();}
 $('mapReset').onclick=()=>{cur={amsp:'',gtin:''};warn('');renderMap()};
 $('mapList').addEventListener('click',e=>{const b=e.target.closest('button[data-g]');if(!b)return;maps=maps.filter(m=>m.gtin!==b.dataset.g);saveMaps();renderMap()});
@@ -217,7 +223,7 @@ $('mapClear').onclick=()=>$('mapClearConfirm').hidden=false;
 $('mapClearNo').onclick=()=>$('mapClearConfirm').hidden=true;
 $('mapClearYes').onclick=()=>{maps=[];saveMaps();$('mapClearConfirm').hidden=true;renderMap()};
 $('mapXls').onclick=()=>{
-  const rows=[['AMSP code (sticker)','GTIN','Scanned at']].concat(maps.map(m=>[m.amsp,m.gtin,m.at]));
+  const rows=[['AMSP prcode','GTIN','Scanned at']].concat(maps.map(m=>[m.amsp,m.gtin,m.at]));
   const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:20},{wch:18},{wch:22}];
   for(let r=1;r<rows.length;r++){for(const c of ['A','B']){const cell=ws[c+(r+1)];if(cell){cell.t='s';cell.v=String(cell.v)}}}
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'GTIN Mapping');
