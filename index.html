@@ -9,6 +9,7 @@
 :root{--bg:#0f1513;--surface:#18211e;--ink:#e4ece8;--muted:#97a6a0;--line:#2b3733;--accent:#3fbf9b;--accent-ink:#06231b;--warn:#f0b35a;--bad:#f08a8a;--bad-soft:#3a1b1b;
 --display:"Archivo",system-ui,sans-serif;--body:"Public Sans",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace;color-scheme:dark}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px}
 .wrap{max-width:720px;margin:0 auto;padding:max(12px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) 40px max(14px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:12px}
 .top{display:flex;justify-content:space-between;align-items:center;gap:10px}
@@ -52,7 +53,7 @@ ul{list-style:none;margin:0;padding:0}
   <div class="cam" id="cam">
     <video id="v" playsinline muted></video>
     <div class="aim"></div>
-    <div class="idle" id="idle">Tap <b>Start scanning</b>, then move the phone slowly over the boxes.<br>Each new box beeps once.</div>
+    <div class="idle" id="idle"><p style="margin:0">Tap <b>Start scanning</b>, then move the phone slowly over the boxes.<br>Each new box beeps once.</p></div>
     <div class="msg" id="msg" hidden></div>
   </div>
 
