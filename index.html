@@ -44,11 +44,27 @@ ul{list-style:none;margin:0;padding:0}
 .ser li button{border:0;background:none;color:var(--bad);font:600 .8rem var(--body);padding:4px 6px;cursor:pointer}
 .confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .note{font-size:.82rem;color:var(--muted)}
+.tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px}
+.tabs button{appearance:none;border:0;background:transparent;color:var(--muted);font:600 .95rem var(--body);padding:10px;border-radius:9px;cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.slot{background:var(--surface);border:2px dashed var(--line);border-radius:12px;padding:10px;min-width:0}
+.slot.done{border-style:solid;border-color:var(--accent)}
+.slot span{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.slot b{display:block;font:500 1rem var(--mono);word-break:break-all;margin-top:4px}
+.maps li{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:8px 0;border-top:1px solid var(--line);font-size:.86rem}
+.maps li .k{font-family:var(--mono)} .maps li .m{color:var(--muted);font-size:.78rem}
+.maps li button{grid-row:1/3;grid-column:2;border:0;background:none;color:var(--bad);font:600 .8rem var(--body);cursor:pointer}
+.warnbox{background:var(--bad-soft);color:var(--bad);border-radius:10px;padding:10px;font-size:.88rem}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="top"><h1>NSH Box Scanner</h1><button class="btn" id="torch" hidden>Light</button></div>
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tabCount" aria-selected="true">Count boxes</button>
+    <button role="tab" id="tabMap" aria-selected="false">Map products</button>
+  </div>
 
   <div class="cam" id="cam">
     <video id="v" playsinline muted></video>
@@ -62,6 +78,24 @@ ul{list-style:none;margin:0;padding:0}
     <button class="btn" id="undoBtn" disabled>Undo last</button>
   </div>
 
+  <section id="mapView" hidden style="display:flex;flex-direction:column;gap:10px">
+    <p class="note" style="margin:0">Scan the AMSP sticker QR on a box, then the box's printed code (GTIN). Either order works. The pair saves when both are read.</p>
+    <div class="pair">
+      <div class="slot" id="slotA"><span>AMSP product (sticker)</span><b id="valA">–</b></div>
+      <div class="slot" id="slotG"><span>GTIN (box code)</span><b id="valG">–</b></div>
+    </div>
+    <div class="warnbox" id="mapWarn" hidden></div>
+    <div class="row">
+      <button class="btn" id="mapReset">Clear current pair</button>
+      <button class="btn" id="mapXls" disabled>Save mapping Excel</button>
+      <button class="btn danger" id="mapClear" disabled>Delete all</button>
+    </div>
+    <div class="confirm" id="mapClearConfirm" hidden><span>Delete all mapped pairs?</span><button class="btn danger" id="mapClearYes">Delete all</button><button class="btn" id="mapClearNo">Keep</button></div>
+    <div class="t"><span>Mapped products</span><b id="nMap">0</b></div>
+    <ul class="maps" id="mapList"></ul>
+  </section>
+
+  <section id="countView" style="display:flex;flex-direction:column;gap:12px">
   <div class="tally">
     <div class="t"><span>Scanned</span><b id="nScan">0</b></div>
     <div class="t"><span>Boxes counted by hand</span><input id="expect" type="number" inputmode="numeric" min="0" placeholder="–"></div>
@@ -76,6 +110,7 @@ ul{list-style:none;margin:0;padding:0}
 
   <div id="lots" style="display:flex;flex-direction:column;gap:10px"></div>
   <p class="note">Scans and product names are kept on this phone until you tap New count.</p>
+  </section>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.4/dist/iife/reader/index.js"></script>
@@ -93,7 +128,7 @@ function parseGS1(t){
     while(s.length>=2){if(s[0]===GS){s=s.slice(1);continue}const ai=s.slice(0,2);
       if(fx[ai]){o[ai]=s.slice(2,2+fx[ai]);s=s.slice(2+fx[ai])}
       else if(ai==='10'||ai==='21'){const e=s.indexOf(GS,2);o[ai]=e<0?s.slice(2):s.slice(2,e);s=e<0?'':s.slice(e+1)}else break;}}
-  return {gtin:o['01']||'',serial:o['21']||'',expiry:o['17']||'',batch:o['10']||'',raw:t};
+  return {gtin:/^\d{14}$/.test(o['01']||'')?o['01']:'',serial:o['21']||'',expiry:o['17']||'',batch:o['10']||'',raw:t};
 }
 const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 function expD(e){if(!/^\d{6}$/.test(e))return null;let y=2000+ +e.slice(0,2),m=+e.slice(2,4),d=+e.slice(4,6);if(!d)d=new Date(y,m,0).getDate();return new Date(y,m-1,d)}
@@ -149,6 +184,46 @@ $('xlsBtn').onclick=()=>{
   XLSX.writeFile(wb,'Box_Count_'+st+'.xlsx');
 };
 
+// ---------- mode + mapping ----------
+let mode='count';
+let maps=S.get('ls_maps',[]); // [{amsp,gtin,at}]
+let cur={amsp:'',gtin:''};
+const saveMaps=()=>S.set('ls_maps',maps);
+function setMode(m){mode=m;$('tabCount').setAttribute('aria-selected',m==='count');$('tabMap').setAttribute('aria-selected',m==='map');
+  $('countView').hidden=m!=='count';$('mapView').hidden=m!=='map';$('undoBtn').hidden=m!=='count';
+  if(!$('msg').hidden)$('msg').textContent=m==='map'?'Scan sticker QR or box code':'Point at a box code';}
+$('tabCount').onclick=()=>setMode('count');$('tabMap').onclick=()=>setMode('map');
+function renderMap(){
+  $('valA').textContent=cur.amsp||'–';$('valG').textContent=cur.gtin||'–';
+  $('slotA').classList.toggle('done',!!cur.amsp);$('slotG').classList.toggle('done',!!cur.gtin);
+  $('nMap').textContent=maps.length;$('mapXls').disabled=!maps.length;$('mapClear').disabled=!maps.length;
+  $('mapList').innerHTML=maps.slice().reverse().map(m=>`<li><span class="k">AMSP ${esc(m.amsp)} → GTIN ${esc(m.gtin)}</span><span class="m">${esc(m.at)}</span><button data-g="${esc(m.gtin)}">✕ Delete</button></li>`).join('');}
+function warn(t){const w=$('mapWarn');if(!t){w.hidden=true;return}w.hidden=false;w.textContent=t;}
+function tryPair(){
+  if(!cur.amsp||!cur.gtin)return;
+  const ex=maps.find(m=>m.gtin===cur.gtin);
+  if(ex&&ex.amsp===cur.amsp){beepDup();flash('Already mapped','dup');warn('');cur={amsp:'',gtin:''};renderMap();return}
+  if(ex){tone(220,400,.3);warn(`GTIN ${cur.gtin} is already mapped to AMSP ${ex.amsp}. Scanned sticker says ${cur.amsp}. Check the box. Delete the old pair below if the new one is correct.`);cur={amsp:'',gtin:''};renderMap();return}
+  maps.push({amsp:cur.amsp,gtin:cur.gtin,at:new Date().toLocaleString()});saveMaps();
+  beepNew();setTimeout(beepNew,150);flash('Mapped AMSP '+cur.amsp+' → '+cur.gtin,'hit');warn('');cur={amsp:'',gtin:''};renderMap();}
+function onMapCode(t){
+  const p=parseGS1(t);
+  if(p.gtin){ if(cur.gtin===p.gtin)return; cur.gtin=p.gtin; beepNew(); flash('GTIN '+p.gtin+(cur.amsp?'':' · now scan sticker'),'hit'); }
+  else { const v=t.trim(); if(cur.amsp===v)return; cur.amsp=v; beepNew(); flash('AMSP '+v+(cur.gtin?'':' · now scan box code'),'hit'); }
+  renderMap(); tryPair();}
+$('mapReset').onclick=()=>{cur={amsp:'',gtin:''};warn('');renderMap()};
+$('mapList').addEventListener('click',e=>{const b=e.target.closest('button[data-g]');if(!b)return;maps=maps.filter(m=>m.gtin!==b.dataset.g);saveMaps();renderMap()});
+$('mapClear').onclick=()=>$('mapClearConfirm').hidden=false;
+$('mapClearNo').onclick=()=>$('mapClearConfirm').hidden=true;
+$('mapClearYes').onclick=()=>{maps=[];saveMaps();$('mapClearConfirm').hidden=true;renderMap()};
+$('mapXls').onclick=()=>{
+  const rows=[['AMSP code (sticker)','GTIN','Scanned at']].concat(maps.map(m=>[m.amsp,m.gtin,m.at]));
+  const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:20},{wch:18},{wch:22}];
+  for(let r=1;r<rows.length;r++){for(const c of ['A','B']){const cell=ws[c+(r+1)];if(cell){cell.t='s';cell.v=String(cell.v)}}}
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'GTIN Mapping');
+  const d=new Date(),st=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+'_'+String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0');
+  XLSX.writeFile(wb,'GTIN_Mapping_'+st+'.xlsx');};
+
 // ---------- camera + decode loop ----------
 let stream=null,running=false,reader=null,track=null,torchOn=false;
 const v=$('v'),cv=document.createElement('canvas'),cx=cv.getContext('2d',{willReadFrequently:true});
@@ -163,10 +238,13 @@ async function loop(){
     const x=Math.round(vw*.08),y=Math.round(vh*.14),w=vw-2*x,h=vh-2*y;
     cv.width=w;cv.height=h;cx.drawImage(v,x,y,w,h,0,0,w,h);
     try{
-      const rs=await reader(cx.getImageData(0,0,w,h),{formats:['DataMatrix','QRCode'],tryHarder:true,tryInvert:true,tryRotate:true,maxNumberOfSymbols:6,textMode:'HRI'});
+      const rs=await reader(cx.getImageData(0,0,w,h),{formats:mode==='map'?[]:['DataMatrix','QRCode'],tryHarder:true,tryInvert:true,tryRotate:true,maxNumberOfSymbols:6,textMode:'HRI'});
       const now=Date.now();
       for(const r of rs){ if(!r.isValid||!r.text)continue;
-        const t=r.text; const seen=lastSeen.get(t); lastSeen.set(t,now);
+        const t=r.text;
+        if(mode==='map'){onMapCode(t);continue}
+        const seen=lastSeen.get(t); lastSeen.set(t,now);
+        if(!parseGS1(t).gtin){ if(!seen||now-seen>1500)flash('Not a box code (sticker?) · ignored','dup'); continue; }
         if(items.some(i=>i.raw===t)){ if(!seen||now-seen>1500){beepDup();flash('Already counted · '+parseGS1(t).serial,'dup')} continue; }
         const p=parseGS1(t);p.at=new Date().toLocaleString();items.push(p);save();render();
         beepNew();flash('Added #'+items.length+' · '+p.serial,'hit');
@@ -187,7 +265,7 @@ async function start(){
     try{const caps=track.getCapabilities&&track.getCapabilities();if(caps&&caps.torch)$('torch').hidden=false;
         if(caps&&caps.focusMode&&caps.focusMode.includes('continuous'))await track.applyConstraints({advanced:[{focusMode:'continuous'}]})}catch(e){}
     $('idle').hidden=true;running=true;$('startBtn').disabled=false;$('startBtn').textContent='Stop';
-    $('msg').hidden=false;$('msg').textContent='Point at a box code';
+    $('msg').hidden=false;$('msg').textContent=mode==='map'?'Scan sticker QR or box code':'Point at a box code';
     try{await navigator.wakeLock?.request('screen')}catch(e){}
     loop();
   }catch(e){
@@ -200,7 +278,7 @@ function stop(){running=false;try{stream&&stream.getTracks().forEach(t=>t.stop()
 $('startBtn').onclick=()=>running?stop():start();
 $('torch').onclick=async()=>{try{torchOn=!torchOn;await track.applyConstraints({advanced:[{torch:torchOn}]});$('torch').textContent=torchOn?'Light off':'Light'}catch(e){}};
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&running)stop()});
-render();
+render();renderMap();
 </script>
 </body>
 </html>
