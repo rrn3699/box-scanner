@@ -73,25 +73,27 @@ ul{list-style:none;margin:0;padding:0}
     <div class="msg" id="msg" hidden></div>
   </div>
 
-  <div class="row">
+  <div class="row" id="countBtns">
     <button class="btn primary" id="startBtn">Start scanning</button>
     <button class="btn" id="undoBtn" disabled>Undo last</button>
   </div>
 
   <section id="mapView" hidden style="display:flex;flex-direction:column;gap:10px">
-    <p class="note" style="margin:0">Scan the AMSP sticker QR on a box, then the box's printed code (GTIN). Either order works. The pair saves when both are read.</p>
+    <p class="note" style="margin:0">Step 1: tap <b>Scan AMSP prcode</b> and scan the sticker QR. Step 2: tap <b>Scan GTIN</b> and scan the box code. Each prcode links to one GTIN only.</p>
     <div class="pair">
-      <div class="slot" id="slotA"><span>AMSP prcode (sticker)</span><b id="valA">–</b></div>
-      <div class="slot" id="slotG"><span>GTIN (box code)</span><b id="valG">–</b></div>
+      <button class="btn primary" id="btnA">1 · Scan AMSP prcode</button>
+      <button class="btn primary" id="btnG" disabled>2 · Scan GTIN</button>
+      <div class="slot" id="slotA"><span>AMSP prcode</span><b id="valA">–</b></div>
+      <div class="slot" id="slotG"><span>GTIN</span><b id="valG">–</b></div>
     </div>
     <div class="warnbox" id="mapWarn" hidden></div>
     <div class="row">
-      <button class="btn" id="mapReset">Clear current pair</button>
+      <button class="btn" id="mapReset">Cancel this pair</button>
       <button class="btn" id="mapXls" disabled>Save mapping Excel</button>
       <button class="btn danger" id="mapClear" disabled>Delete all</button>
     </div>
     <div class="confirm" id="mapClearConfirm" hidden><span>Delete all mapped pairs?</span><button class="btn danger" id="mapClearYes">Delete all</button><button class="btn" id="mapClearNo">Keep</button></div>
-    <div class="t"><span>Mapped products</span><b id="nMap">0</b></div>
+    <div class="t"><span>Products mapped</span><b id="nMap">0</b></div>
     <ul class="maps" id="mapList"></ul>
   </section>
 
@@ -189,35 +191,53 @@ let mode='count';
 let maps=S.get('ls_maps',[]); // [{amsp,gtin,at}]
 let cur={amsp:'',gtin:''};
 const saveMaps=()=>S.set('ls_maps',maps);
-function setMode(m){mode=m;$('tabCount').setAttribute('aria-selected',m==='count');$('tabMap').setAttribute('aria-selected',m==='map');
-  $('countView').hidden=m!=='count';$('mapView').hidden=m!=='map';$('undoBtn').hidden=m!=='count';
-  if(!$('msg').hidden)$('msg').textContent=m==='map'?'Scan sticker QR or box code':'Point at a box code';}
+let want=null; // 'prcode' | 'gtin' while a map scan is running
+function setMode(m){ if(running)stop(); want=null; mode=m;$('tabCount').setAttribute('aria-selected',m==='count');$('tabMap').setAttribute('aria-selected',m==='map');
+  $('countView').hidden=m!=='count';$('mapView').hidden=m!=='map';$('countBtns').hidden=m!=='count';
+  $('idle').innerHTML=m==='map'?'<p style="margin:0">Tap <b>1 · Scan AMSP prcode</b> below to start.</p>':'<p style="margin:0">Tap <b>Start scanning</b>, then move the phone slowly over the boxes.<br>Each new box beeps once.</p>';}
 $('tabCount').onclick=()=>setMode('count');$('tabMap').onclick=()=>setMode('map');
 function renderMap(){
   $('valA').textContent=cur.amsp||'–';$('valG').textContent=cur.gtin||'–';
   $('slotA').classList.toggle('done',!!cur.amsp);$('slotG').classList.toggle('done',!!cur.gtin);
+  $('btnA').textContent=want==='prcode'?'Scanning sticker… (tap to stop)':(cur.amsp?'1 · Rescan AMSP prcode':'1 · Scan AMSP prcode');
+  $('btnG').textContent=want==='gtin'?'Scanning box… (tap to stop)':'2 · Scan GTIN';
+  $('btnG').disabled=!cur.amsp;
   $('nMap').textContent=maps.length;$('mapXls').disabled=!maps.length;$('mapClear').disabled=!maps.length;
   $('mapList').innerHTML=maps.slice().reverse().map(m=>`<li><span class="k">prcode ${esc(m.amsp)} → GTIN ${esc(m.gtin)}</span><span class="m">${esc(m.at)}</span><button data-g="${esc(m.gtin)}">✕ Delete</button></li>`).join('');}
 function warn(t){const w=$('mapWarn');if(!t){w.hidden=true;return}w.hidden=false;w.textContent=t;}
-function tryPair(){
-  if(!cur.amsp||!cur.gtin)return;
-  const ex=maps.find(m=>m.gtin===cur.gtin);
-  if(ex&&ex.amsp===cur.amsp){beepDup();flash('Already mapped','dup');warn('');cur={amsp:'',gtin:''};renderMap();return}
-  if(ex){tone(220,400,.3);warn(`GTIN ${cur.gtin} is already mapped to prcode ${ex.amsp}. This sticker says ${cur.amsp}. Check the box. Delete the old pair below if the new one is correct.`);cur={amsp:'',gtin:''};renderMap();return}
-  maps.push({amsp:cur.amsp,gtin:cur.gtin,at:new Date().toLocaleString()});saveMaps();
-  beepNew();setTimeout(beepNew,150);flash('Mapped prcode '+cur.amsp+' → '+cur.gtin,'hit');warn('');cur={amsp:'',gtin:''};renderMap();}
+function reject(t){tone(220,450,.3);warn(t);flash(t,'dup');}
+function codeKind(raw){
+  raw=raw.trim();
+  if(raw.includes('//')){const v=raw.split('//')[0].trim();return /^\d+$/.test(v)?{kind:'prcode',v}:{kind:'bad'};}
+  const p=parseGS1(raw); if(p.gtin) return {kind:'gtin',v:p.gtin};
+  if(/^(\d{8}|\d{12}|\d{13})$/.test(raw)) return {kind:'gtin',v:raw.padStart(14,'0')};
+  return {kind:'bad'};}
 function onMapCode(t){
-  const raw=t.trim(), p=parseGS1(raw);
-  let gtin=p.gtin;
-  if(!gtin && /^(\d{8}|\d{12}|\d{13})$/.test(raw)) gtin=raw.padStart(14,'0'); // plain EAN/UPC box barcode
-  if(raw.includes('//')){ // AMSP sticker: prcode//...//expiry -> keep prcode only
-    const v=raw.split('//')[0].trim();
-    if(!/^\d+$/.test(v)){ flash('Sticker not readable: '+raw,'dup'); return; }
-    if(cur.amsp===v)return; cur.amsp=v; beepNew(); flash('AMSP prcode '+v+(cur.gtin?'':' · now scan box code'),'hit');
-  } else if(gtin){ if(cur.gtin===gtin)return; cur.gtin=gtin; beepNew(); flash('GTIN '+gtin+(cur.amsp?'':' · now scan sticker'),'hit'); }
-  else { flash('Not a sticker or box code · ignored','dup'); return; }
-  renderMap(); tryPair();}
-$('mapReset').onclick=()=>{cur={amsp:'',gtin:''};warn('');renderMap()};
+  if(!want) return;
+  const k=codeKind(t);
+  if(want==='prcode'){
+    if(k.kind!=='prcode'){flash('That is not an AMSP sticker. Scan the sticker QR.','dup');return}
+    const ex=maps.find(m=>m.amsp===k.v);
+    stop();
+    if(ex){reject(`prcode ${k.v} is already mapped to GTIN ${ex.gtin}. One prcode can have only one GTIN. Delete that pair below first if it is wrong.`);cur={amsp:'',gtin:''};renderMap();return}
+    cur={amsp:k.v,gtin:''};warn('');beepNew();renderMap();return;
+  }
+  if(want==='gtin'){
+    if(k.kind!=='gtin'){flash('That is not a box code. Scan the GTIN on the box.','dup');return}
+    const ex=maps.find(m=>m.gtin===k.v);
+    stop();
+    if(ex){reject(`GTIN ${k.v} is already mapped to prcode ${ex.amsp}. One GTIN can have only one prcode. Delete that pair below first if it is wrong.`);cur.gtin='';renderMap();return}
+    cur.gtin=k.v;
+    maps.push({amsp:cur.amsp,gtin:cur.gtin,at:new Date().toLocaleString()});saveMaps();
+    beepNew();setTimeout(beepNew,150);warn('');
+    const done='Saved: prcode '+cur.amsp+' → GTIN '+cur.gtin;
+    renderMap(); cur={amsp:'',gtin:''}; setTimeout(()=>{renderMap();$('idle').innerHTML='<p style="margin:0">'+esc(done)+'<br>Tap <b>1 · Scan AMSP prcode</b> for the next product.</p>'},700);
+  }
+}
+async function mapScan(w){ if(running){stop();return} want=w; warn(''); renderMap(); await start(); if(!running){want=null;renderMap()} }
+$('btnA').onclick=()=>mapScan('prcode');
+$('btnG').onclick=()=>mapScan('gtin');
+$('mapReset').onclick=()=>{if(running)stop();cur={amsp:'',gtin:''};warn('');renderMap()};
 $('mapList').addEventListener('click',e=>{const b=e.target.closest('button[data-g]');if(!b)return;maps=maps.filter(m=>m.gtin!==b.dataset.g);saveMaps();renderMap()});
 $('mapClear').onclick=()=>$('mapClearConfirm').hidden=false;
 $('mapClearNo').onclick=()=>$('mapClearConfirm').hidden=true;
@@ -271,7 +291,7 @@ async function start(){
     try{const caps=track.getCapabilities&&track.getCapabilities();if(caps&&caps.torch)$('torch').hidden=false;
         if(caps&&caps.focusMode&&caps.focusMode.includes('continuous'))await track.applyConstraints({advanced:[{focusMode:'continuous'}]})}catch(e){}
     $('idle').hidden=true;running=true;$('startBtn').disabled=false;$('startBtn').textContent='Stop';
-    $('msg').hidden=false;$('msg').textContent=mode==='map'?'Scan sticker QR or box code':'Point at a box code';
+    $('msg').hidden=false;$('msg').textContent=mode==='map'?(want==='prcode'?'Point at the AMSP sticker QR':'Point at the box code (GTIN)'):'Point at a box code';
     try{await navigator.wakeLock?.request('screen')}catch(e){}
     loop();
   }catch(e){
@@ -279,7 +299,7 @@ async function start(){
     $('idle').hidden=false;$('idle').innerHTML='Camera could not start.<br>Allow camera access for this page in the browser settings, then try again.<br><small>'+esc(e.name||e)+'</small>';
   }
 }
-function stop(){running=false;try{stream&&stream.getTracks().forEach(t=>t.stop())}catch(e){}stream=null;$('torch').hidden=true;torchOn=false;
+function stop(){running=false;want=null;if(typeof renderMap==='function')setTimeout(renderMap,0);try{stream&&stream.getTracks().forEach(t=>t.stop())}catch(e){}stream=null;$('torch').hidden=true;torchOn=false;
   $('startBtn').textContent='Start scanning';$('idle').hidden=false;$('msg').hidden=true}
 $('startBtn').onclick=()=>running?stop():start();
 $('torch').onclick=async()=>{try{torchOn=!torchOn;await track.applyConstraints({advanced:[{torch:torchOn}]});$('torch').textContent=torchOn?'Light off':'Light'}catch(e){}};
