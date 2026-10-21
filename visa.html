@@ -113,6 +113,9 @@ async function visaExtract(worker, img, W, H, log){
     return {text:(data.text||'').replace(/\s+/g,''),conf:data.confidence};
   }
   const D='0123456789';
+  // choose between first read (orig) and focused re-read (rr): only trust rr when it has the same length
+  const pick=(orig,rr,re)=>{const o=re.test(orig),r=re.test(rr);
+    if(o&&r&&orig===rr)return [orig,96]; if(r&&rr.length===orig.length)return [rr,85]; if(o)return [orig,70]; if(r)return [rr,60]; return [orig||rr,30];};
   // civil no: 8-9 digits standalone
   let civ=find(/^\d{7,10}$/).filter(w=>w.c>40);
   // approval code is 6-7 digits lower on page; civil is the first 8-9 digit word that has a passport-like word right below
@@ -120,10 +123,10 @@ async function visaExtract(worker, img, W, H, log){
   let civW=null, ppW=null;
   for(const c of civ.filter(w=>w.t.length>=8)){const p=pp.find(p=>p.b.y0>c.b.y1-2&&p.b.y0-c.b.y1<hgt(c)*3.5&&Math.abs(p.b.x1-c.b.x1)<hgt(c)*4);if(p){civW=c;ppW=p;break}}
   if(!civW){civW=civ.find(w=>w.t.length>=8)||null}
-  if(civW){const r=await reread(civW.b,D,7);out.civil_no=/^\d{7,10}$/.test(r.text)?r.text:civW.t;conf.civil_no=r.text===civW.t?96:Math.min(70,civW.c)}
-  if(ppW){const r=await reread(ppW.b,'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',7);let t=/^[A-Z0-9]{6,10}$/.test(r.text)?r.text:ppW.t;
+  if(civW){const r=await reread(civW.b,D,7);[out.civil_no,conf.civil_no]=pick(civW.t,r.text,/^\d{7,10}$/)}
+  if(ppW){const r=await reread(ppW.b,'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',7);let [t,pc]=pick(ppW.t,r.text,/^[A-Z]{1,2}[A-Z0-9]{5,9}$/);
     const m=t.match(/^([A-Z]{1,2})(.*)$/); if(m) t=m[1]+m[2].replace(/O|Q|D/g,'0').replace(/I/g,'1').replace(/B/g,'8').replace(/S/g,'5').replace(/Z/g,'2');
-    out.passport_no=t;conf.passport_no=(r.text&&r.text===t)?90:60}
+    out.passport_no=t;conf.passport_no=pc}
   // English name: all-caps alpha words on lines above civil no, right-aligned block
   if(civW){const nameWords=find(/^[A-Z][A-Z'.-]+$/,w=>w.b.y1<civW.b.y0&&civW.b.y0-w.b.y1<hgt(civW)*14&&w.c>50&&w.t.length>=2&&!/^(EN|OMR|QR|SCW)$/.test(w.t));
     // keep the bottom-most line group closest to the top of the data box: take the topmost line among candidates
@@ -131,15 +134,15 @@ async function visaExtract(worker, img, W, H, log){
       out.name_en=line.map(w=>w.t).join(' ');conf.name_en=Math.min(...line.map(w=>w.c))}}
   // bank refs
   const pos=find(/^P[O0]S[A-Z0-9]{8,}$/)[0];
-  if(pos){const r=await reread(pos.b,'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',7);out.bank_ref_1=/^POS[A-Z0-9]{8,}$/.test(r.text)?r.text:pos.t.replace(/^P0S/,'POS');conf.bank_ref_1=r.text===pos.t?95:70}
+  if(pos){const r=await reread(pos.b,'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',7);[out.bank_ref_1,conf.bank_ref_1]=pick(pos.t.replace(/^P0S/,'POS'),r.text,/^POS[A-Z0-9]{8,}$/)}
   const longD=find(/^\d{14,}$/);
   const br=pos?longD.find(w=>Math.abs(cy(w)-cy(pos))<hgt(pos)*1.5):longD[0];
-  if(br){const r=await reread(br.b,D,7);let t=/^\d{14,}$/.test(r.text)?r.text:br.t;
+  if(br){const r=await reread(br.b,D,7);let [t,bc]=pick(br.t,r.text,/^\d{14,}$/);
     // wrapped tail digits on the next line, left-aligned under the number
     const h=hgt(br);const tailBox={x0:br.b.x1-h*2.4,y0:br.b.y1+h*.45,x1:br.b.x1+h*.4,y1:br.b.y1+h*2};
     let tail=await reread(tailBox,D,8);if(!tail.text)tail=await reread(tailBox,D,10);
     log('tail',tail);if(/^\d{1,3}$/.test(tail.text)){t+=tail.text;}
-    out.bank_ref_2=t;conf.bank_ref_2=t.length>=17?85:50}
+    out.bank_ref_2=t;conf.bank_ref_2=Math.min(bc,t.length>=17?90:50)}
   // transaction ref: word ending with 10-14 digits, below bank refs
   const tr=find(/\d{10,14}$/,w=>(!br||w.b.y0>br.b.y1)&&!/\*/.test(w.t)&&w!==br)[0];
   if(tr){const r=await reread({x0:tr.b.x0+(tr.b.x1-tr.b.x0)*.12,y0:tr.b.y0,x1:tr.b.x1,y1:tr.b.y1},D,7);const m1=(r.text.match(/\d{10,14}$/)||[])[0];const m2=(tr.t.match(/(\d{10,14})$/)||[])[1];
@@ -157,7 +160,7 @@ async function visaExtract(worker, img, W, H, log){
     out.card_masked=m?m[1]+'******'+m[2]:src;conf.card_masked=m&&m[2].length===6?90:40}
   // approval code: 5-8 digit standalone word below card
   const ap=find(/^\d{5,8}$/,w=>(card?w.b.y0>card.b.y1-2:true)&&w!==civW)[0];
-  if(ap){const r=await reread(ap.b,D,7);out.approval_code=/^\d{5,8}$/.test(r.text)?r.text:ap.t;conf.approval_code=r.text===ap.t?95:60}
+  if(ap){const r=await reread(ap.b,D,7);[out.approval_code,conf.approval_code]=pick(ap.t,r.text,/^\d{5,8}$/)}
   // amount: number left of "OMR"
   const omr=find(/^[oO0]MR$/i)[0];
   if(omr){const h=hgt(omr);const r=await reread({x0:omr.b.x0-h*3.2,y0:omr.b.y0,x1:omr.b.x0-1,y1:omr.b.y1},D+'.',7);
@@ -165,7 +168,6 @@ async function visaExtract(worker, img, W, H, log){
   await worker.setParameters({tessedit_pageseg_mode:'11',tessedit_char_whitelist:''});
   return {fields:out,conf};
 }
-
 
 </script>
 <script>
