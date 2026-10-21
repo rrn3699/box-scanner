@@ -44,7 +44,8 @@ ul{list-style:none;margin:0;padding:0}
 .ser li button{border:0;background:none;color:var(--bad);font:600 .8rem var(--body);padding:4px 6px;cursor:pointer}
 .confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .note{font-size:.82rem;color:var(--muted)}
-.tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px}
+.tabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px}
+.tabs a{color:var(--muted);text-decoration:none;font:600 .95rem var(--body);padding:10px;border-radius:9px;text-align:center}
 .tabs button{appearance:none;border:0;background:transparent;color:var(--muted);font:600 .95rem var(--body);padding:10px;border-radius:9px;cursor:pointer}
 .tabs button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
 .pair{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -64,6 +65,7 @@ ul{list-style:none;margin:0;padding:0}
   <div class="tabs" role="tablist">
     <button role="tab" id="tabCount" aria-selected="true">Count boxes</button>
     <button role="tab" id="tabMap" aria-selected="false">Map products</button>
+    <a href="visa.html">Visa medical</a>
   </div>
 
   <div class="cam" id="cam">
@@ -304,7 +306,7 @@ function stop(){running=false;want=null;if(typeof renderMap==='function')setTime
 $('startBtn').onclick=()=>running?stop():start();
 $('torch').onclick=async()=>{try{torchOn=!torchOn;await track.applyConstraints({advanced:[{torch:torchOn}]});$('torch').textContent=torchOn?'Light off':'Light'}catch(e){}};
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&running)stop()});
-render();renderMap();
+render();renderMap();if(location.hash==='#map')setMode('map');
 </script>
 </body>
 </html>

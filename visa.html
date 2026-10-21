@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>NSH Visa Medical</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{--bg:#0f1513;--surface:#18211e;--ink:#e4ece8;--muted:#97a6a0;--line:#2b3733;--accent:#3fbf9b;--accent-ink:#06231b;--warn:#f0b35a;--warn-soft:#3a2b14;--bad:#f08a8a;--bad-soft:#3a1b1b;--ok-soft:#183a31;
+--display:"Archivo",system-ui,sans-serif;--body:"Public Sans",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace;color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px}
+.wrap{max-width:820px;margin:0 auto;padding:max(12px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) 40px max(14px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:12px}
+h1{font:800 1.15rem var(--display);margin:0}
+h2{font:700 1rem var(--display);margin:0}
+.nav{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px}
+.nav a{color:var(--muted);text-decoration:none;font:600 .9rem var(--body);padding:10px 6px;border-radius:9px;text-align:center}
+.nav a.on{background:var(--accent);color:var(--accent-ink)}
+.btn{appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:600 .95rem var(--body);padding:12px 14px;border-radius:10px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);flex:1 1 200px;font-size:1.05rem;padding:16px}
+.btn.danger{border-color:var(--bad);color:var(--bad);background:var(--bad-soft)}
+.btn:disabled{opacity:.45}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.status{font-size:.92rem;color:var(--muted)} .status.err{color:var(--bad)}
+.bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden}.bar>i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:12px}
+.chip{display:inline-block;font:600 .74rem var(--body);padding:3px 9px;border-radius:999px}
+.chip.ok{background:var(--ok-soft);color:var(--accent)}.chip.warn{background:var(--warn-soft);color:var(--warn)}.chip.bad{background:var(--bad-soft);color:var(--bad)}
+.fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px 14px}
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f label{font:700 .68rem var(--display);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.f input{font:500 1rem var(--mono);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 10px;width:100%;min-width:0}
+.f input.ar{direction:rtl;font-family:var(--body)}
+.f input.flag{border-color:var(--warn);background:var(--warn-soft)}
+.f .hint{font-size:.74rem;color:var(--warn);min-height:1em}
+.preview{width:100%;max-height:260px;object-fit:contain;border-radius:10px;border:1px solid var(--line);background:#000}
+.tally{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.t{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px}
+.t b{display:block;font:800 1.5rem var(--display);font-variant-numeric:tabular-nums}
+.t span{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;font-size:.84rem}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font:700 .68rem var(--display);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--surface)}
+td{font-family:var(--mono)}
+td button{border:0;background:none;color:var(--bad);font:600 .8rem var(--body);cursor:pointer}
+.empty{border:1px dashed var(--line);border-radius:12px;padding:16px;color:var(--muted);text-align:center}
+.confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.note{font-size:.82rem;color:var(--muted);margin:0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>NSH Visa Medical</h1>
+  <nav class="nav"><a href="./#count">Count boxes</a><a href="./#map">Map products</a><a class="on" href="visa.html">Visa medical</a></nav>
+
+  <p class="note">Photograph the full payment slip, flat and in good light. The QR and the printed details are read on this phone. Check the highlighted fields, then save.</p>
+  <div class="row">
+    <label class="btn primary" for="cam">Photograph slip</label>
+    <input id="cam" type="file" accept="image/*" capture="environment">
+    <label class="btn" for="gal">Choose photo</label>
+    <input id="gal" type="file" accept="image/*">
+  </div>
+  <div id="prog" hidden><div class="status" id="status"></div><div class="bar"><i id="barFill"></i></div></div>
+
+  <section class="panel" id="review" hidden>
+    <div class="row" style="justify-content:space-between"><h2>Check before saving</h2><span id="dupChip"></span></div>
+    <img class="preview" id="preview" alt="Slip photo">
+    <div id="qrLine" class="row"></div>
+    <div class="fields" id="fields"></div>
+    <div class="row">
+      <button class="btn primary" id="saveBtn">Save</button>
+      <button class="btn" id="discardBtn">Discard</button>
+    </div>
+  </section>
+
+  <div class="tally">
+    <div class="t"><span>Slips</span><b id="tCount">0</b></div>
+    <div class="t"><span>Fees OMR</span><b id="tFee">0.000</b></div>
+    <div class="t"><span>Commission OMR</span><b id="tCom">0.000</b></div>
+  </div>
+  <div class="row">
+    <button class="btn" id="xlsBtn" disabled>Save Excel</button>
+    <button class="btn danger" id="clearBtn" disabled>Delete all</button>
+  </div>
+  <div class="confirm" id="clearConfirm" hidden><span>Delete all saved slips?</span><button class="btn danger" id="clearYes">Delete all</button><button class="btn" id="clearNo">Keep</button></div>
+  <div class="empty" id="empty">No slips saved yet.</div>
+  <div class="tablewrap" id="tableWrap" hidden><table><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
+  <p class="note">Slips are kept on this phone until you delete them. Save Excel to send them to the office. The first slip takes longer while the text reader downloads (about 5 MB, once).</p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.4/dist/iife/reader/index.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script>
+// Shared by browser + node test. worker = tesseract.js worker (eng). img = image source accepted by tesseract.
+async function visaExtract(worker, img, W, H, log){
+  log=log||(()=>{});
+  await worker.setParameters({tessedit_pageseg_mode:'11',tessedit_char_whitelist:''});
+  const {data}=await worker.recognize(img,{},{blocks:true});
+  const words=[];for(const b of data.blocks||[])for(const p of b.paragraphs)for(const l of p.lines)for(const wd of l.words)words.push({t:wd.text.trim(),c:wd.confidence,b:wd.bbox});
+  const hgt=w=>w.b.y1-w.b.y0, cy=w=>(w.b.y0+w.b.y1)/2;
+  const out={}, conf={};
+  const find=(re,filter)=>words.filter(w=>re.test(w.t)&&(!filter||filter(w)));
+  async function reread(box,white,psm){
+    const pad=Math.round((box.y1-box.y0)*.35);
+    const r={left:Math.max(0,box.x0-pad),top:Math.max(0,box.y0-pad),width:Math.min(W,box.x1+pad)-Math.max(0,box.x0-pad),height:Math.min(H,box.y1+pad)-Math.max(0,box.y0-pad)};
+    if(r.width<4||r.height<4)return {text:'',conf:0};
+    await worker.setParameters({tessedit_pageseg_mode:String(psm||7),tessedit_char_whitelist:white});
+    const {data}=await worker.recognize(img,{rectangle:r});
+    return {text:(data.text||'').replace(/\s+/g,''),conf:data.confidence};
+  }
+  const D='0123456789';
+  // civil no: 8-9 digits standalone
+  let civ=find(/^\d{7,10}$/).filter(w=>w.c>40);
+  // approval code is 6-7 digits lower on page; civil is the first 8-9 digit word that has a passport-like word right below
+  const pp=find(/^[A-Z]{1,2}[0-9OIBSZQD]{5,9}$/);
+  let civW=null, ppW=null;
+  for(const c of civ.filter(w=>w.t.length>=8)){const p=pp.find(p=>p.b.y0>c.b.y1-2&&p.b.y0-c.b.y1<hgt(c)*3.5&&Math.abs(p.b.x1-c.b.x1)<hgt(c)*4);if(p){civW=c;ppW=p;break}}
+  if(!civW){civW=civ.find(w=>w.t.length>=8)||null}
+  if(civW){const r=await reread(civW.b,D,7);out.civil_no=/^\d{7,10}$/.test(r.text)?r.text:civW.t;conf.civil_no=r.text===civW.t?96:Math.min(70,civW.c)}
+  if(ppW){const r=await reread(ppW.b,'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',7);let t=/^[A-Z0-9]{6,10}$/.test(r.text)?r.text:ppW.t;
+    const m=t.match(/^([A-Z]{1,2})(.*)$/); if(m) t=m[1]+m[2].replace(/O|Q|D/g,'0').replace(/I/g,'1').replace(/B/g,'8').replace(/S/g,'5').replace(/Z/g,'2');
+    out.passport_no=t;conf.passport_no=(r.text&&r.text===t)?90:60}
+  // English name: all-caps alpha words on lines above civil no, right-aligned block
+  if(civW){const nameWords=find(/^[A-Z][A-Z'.-]+$/,w=>w.b.y1<civW.b.y0&&civW.b.y0-w.b.y1<hgt(civW)*14&&w.c>50&&w.t.length>=2&&!/^(EN|OMR|QR|SCW)$/.test(w.t));
+    // keep the bottom-most line group closest to the top of the data box: take the topmost line among candidates
+    if(nameWords.length){const top=Math.min(...nameWords.map(w=>w.b.y0));const line=nameWords.filter(w=>Math.abs(w.b.y0-top)<hgt(nameWords[0])*1.2).sort((a,b)=>a.b.x0-b.b.x0);
+      out.name_en=line.map(w=>w.t).join(' ');conf.name_en=Math.min(...line.map(w=>w.c))}}
+  // bank refs
+  const pos=find(/^P[O0]S[A-Z0-9]{8,}$/)[0];
+  if(pos){const r=await reread(pos.b,'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',7);out.bank_ref_1=/^POS[A-Z0-9]{8,}$/.test(r.text)?r.text:pos.t.replace(/^P0S/,'POS');conf.bank_ref_1=r.text===pos.t?95:70}
+  const longD=find(/^\d{14,}$/);
+  const br=pos?longD.find(w=>Math.abs(cy(w)-cy(pos))<hgt(pos)*1.5):longD[0];
+  if(br){const r=await reread(br.b,D,7);let t=/^\d{14,}$/.test(r.text)?r.text:br.t;
+    // wrapped tail digits on the next line, left-aligned under the number
+    const h=hgt(br);const tailBox={x0:br.b.x1-h*2.4,y0:br.b.y1+h*.45,x1:br.b.x1+h*.4,y1:br.b.y1+h*2};
+    let tail=await reread(tailBox,D,8);if(!tail.text)tail=await reread(tailBox,D,10);
+    log('tail',tail);if(/^\d{1,3}$/.test(tail.text)){t+=tail.text;}
+    out.bank_ref_2=t;conf.bank_ref_2=t.length>=17?85:50}
+  // transaction ref: word ending with 10-14 digits, below bank refs
+  const tr=find(/\d{10,14}$/,w=>(!br||w.b.y0>br.b.y1)&&!/\*/.test(w.t)&&w!==br)[0];
+  if(tr){const r=await reread({x0:tr.b.x0+(tr.b.x1-tr.b.x0)*.12,y0:tr.b.y0,x1:tr.b.x1,y1:tr.b.y1},D,7);const m1=(r.text.match(/\d{10,14}$/)||[])[0];const m2=(tr.t.match(/(\d{10,14})$/)||[])[1];
+    out.transaction_ref=(m1&&m2&&m1.endsWith(m2.slice(-10)))?(m1.length===m2.length?m1:m2):(m2||m1||'');conf.transaction_ref=m1&&m2&&m1.slice(-12)===m2.slice(-12)?95:40}
+  // status
+  const suc=find(/^Success/i)[0], cap=find(/^CAPTURED$/i)[0];
+  out.status=[suc&&'Success',cap&&'CAPTURED'].filter(Boolean).join(' - ');conf.status=suc||cap?95:0;
+  // card masked
+  const card=find(/^\d{4}[^0-9\s]{3,}\d{3,}/)[0];
+  if(card){const ch=hgt(card);const r=await reread({x0:card.b.x0,y0:card.b.y0,x1:card.b.x1+ch*2,y1:card.b.y1},'0123456789*',7);log('card',r);const src=/^\d{4}\*{3,}\d{3,}$/.test(r.text)?r.text:card.t;const m=src.match(/^(\d{4})[^0-9]+(\d{3,6})/);
+    if(m&&m[2].length<6){ // re-read only the trailing digits, bigger
+      const tailR=await reread({x0:card.b.x1-ch*(m[2].length*0.62+0.4),y0:card.b.y0,x1:card.b.x1+ch*2,y1:card.b.y1},D,7);log('cardtail',tailR);
+      if(/^\d{6}$/.test(tailR.text)&&tailR.text.startsWith(m[2]))m[2]=tailR.text;
+      else if(/^\d{6}$/.test(tailR.text.slice(-6))&&tailR.text.slice(-6).startsWith(m[2]))m[2]=tailR.text.slice(-6);}
+    out.card_masked=m?m[1]+'******'+m[2]:src;conf.card_masked=m&&m[2].length===6?90:40}
+  // approval code: 5-8 digit standalone word below card
+  const ap=find(/^\d{5,8}$/,w=>(card?w.b.y0>card.b.y1-2:true)&&w!==civW)[0];
+  if(ap){const r=await reread(ap.b,D,7);out.approval_code=/^\d{5,8}$/.test(r.text)?r.text:ap.t;conf.approval_code=r.text===ap.t?95:60}
+  // amount: number left of "OMR"
+  const omr=find(/^[oO0]MR$/i)[0];
+  if(omr){const h=hgt(omr);const r=await reread({x0:omr.b.x0-h*3.2,y0:omr.b.y0,x1:omr.b.x0-1,y1:omr.b.y1},D+'.',7);
+    log('amount',r);const m=r.text.match(/(\d+(\.\d+)?)$/);out.amount=m?m[1]:'';out.currency='OMR';conf.amount=m?85:0}
+  await worker.setParameters({tessedit_pageseg_mode:'11',tessedit_char_whitelist:''});
+  return {fields:out,conf};
+}
+
+
+</script>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const S={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+let rows=S.get('vm_rows',[]); let pending=null;
+
+const FIELDS=[['request_no','Request no (QR)'],['name_en','Name (English)'],['name_ar','Name (Arabic)','ar'],['civil_no','Civil no'],['passport_no','Passport no'],
+ ['bank_ref_1','Bank ref (POS)'],['bank_ref_2','Bank ref (number)'],['transaction_ref','Transaction ref'],['amount','Amount'],['currency','Currency'],
+ ['status','Payment status'],['card_masked','Card (masked)'],['approval_code','Approval code'],['commission','Commission OMR'],['notes','Notes']];
+const CHECK={request_no:v=>!!v||'QR not read. Retake closer, or type it.',name_en:v=>/^[A-Z][A-Z .'-]+$/.test(v)||'Check name',civil_no:v=>/^\d{7,10}$/.test(v)||'Civil no should be 8–9 digits',
+ passport_no:v=>/^[A-Z0-9]{6,10}$/.test(v)||'Check passport no',bank_ref_1:v=>/^POS[A-Z0-9]{8,}$/.test(v)||'Check bank ref',bank_ref_2:v=>/^\d{12,20}$/.test(v)||'Check bank ref',
+ transaction_ref:v=>/^\d{10,14}$/.test(v)||'Check transaction ref',amount:v=>/^\d+(\.\d{1,3})?$/.test(v)||'Amount missing',status:v=>/CAPTURED/i.test(v)||'Payment not shown as CAPTURED',
+ card_masked:v=>/^\d{4}\*{6}\d{6}$/.test(v)||'Check last digits of card',approval_code:v=>/^\d{5,8}$/.test(v)||'Check approval code'};
+const REQUIRED=['request_no','name_en','passport_no','amount'];
+
+// ---------- readers ----------
+let qrReady=null, ocrWorker=null;
+function qrReader(){ if(!qrReady){ZXingWASM.prepareZXingModule({overrides:{locateFile:(p,pre)=>p.endsWith('.wasm')?'https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.4/dist/reader/zxing_reader.wasm':pre+p},fireImmediately:true});qrReady=Promise.resolve(ZXingWASM.readBarcodes)} return qrReady; }
+async function getOCR(onp){ if(!ocrWorker){ ocrWorker=await Tesseract.createWorker('eng',1,{logger:m=>{if(m.status&&onp)onp(m)}}); } return ocrWorker; }
+
+function prog(text,frac){$('prog').hidden=!text;$('status').textContent=text||'';$('status').className='status';if(frac!=null)$('barFill').style.width=Math.round(frac*100)+'%'}
+function progErr(text){$('prog').hidden=false;$('status').textContent=text;$('status').className='status err'}
+
+async function loadCanvas(file,targetW){
+  let bmp;try{bmp=await createImageBitmap(file,{imageOrientation:'from-image'})}catch(e){bmp=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=URL.createObjectURL(file)})}
+  const k=targetW/bmp.width; const c=document.createElement('canvas'); c.width=Math.round(bmp.width*k); c.height=Math.round(bmp.height*k);
+  const x=c.getContext('2d',{willReadFrequently:true}); x.imageSmoothingQuality='high'; x.drawImage(bmp,0,0,c.width,c.height); return c;
+}
+function enhance(c){ // grayscale + contrast stretch (1% cut)
+  const x=c.getContext('2d',{willReadFrequently:true}),d=x.getImageData(0,0,c.width,c.height),p=d.data,h=new Uint32Array(256);
+  for(let i=0;i<p.length;i+=4){const g=(p[i]*299+p[i+1]*587+p[i+2]*114)/1000|0;p[i]=g;h[g]++}
+  const n=p.length/4,cut=n*.01;let lo=0,hi=255,a=0;while(a+h[lo]<cut){a+=h[lo++]}a=0;while(a+h[hi]<cut){a+=h[hi--]}
+  const sc=255/Math.max(1,hi-lo);for(let i=0;i<p.length;i+=4){const v=Math.max(0,Math.min(255,(p[i]-lo)*sc));p[i]=p[i+1]=p[i+2]=v}
+  x.putImageData(d,0,0);return c;
+}
+async function readQR(c){
+  const rb=await qrReader(),x=c.getContext('2d',{willReadFrequently:true});
+  const o={formats:['QRCode'],tryHarder:true,tryInvert:true,tryRotate:true,tryDownscale:true};
+  let r=await rb(x.getImageData(0,0,c.width,c.height),o);
+  if(!r.length){const c2=document.createElement('canvas'),x2=c2.getContext('2d');
+    for(const [fx,fy] of [[0,.3],[0,.5],[.5,.3],[.5,.5],[0,0],[.5,0]]){c2.width=c.width;c2.height=c.height*.6;x2.drawImage(c,fx*c.width,fy*c.height,c.width*.5,c.height*.3,0,0,c2.width,c2.height);
+      r=await rb(x2.getImageData(0,0,c2.width,c2.height),o);if(r.length)break;}}
+  const t=r.find(z=>z.isValid&&z.text);return t?t.text.trim():'';
+}
+
+async function handle(file){
+  if(!file)return; $('review').hidden=true;
+  try{
+    prog('Opening photo…',.05);
+    const c=await loadCanvas(file,1800);
+    $('preview').src=c.toDataURL('image/jpeg',.8);
+    prog('Reading QR code…',.12);
+    const qr=await readQR(c).catch(()=> '');
+    const big=enhance(await loadCanvas(file,1800));
+    prog('Loading text reader…',.2);
+    const w=await getOCR(m=>{ if(m.status==='loading language traineddata')prog('Downloading text reader (first time only)…',.2+.2*(m.progress||0)); });
+    prog('Reading printed details…',.45);
+    const {fields,conf}=await visaExtract(w,big,big.width,big.height);
+    prog('',1);
+    const r={}; for(const [k] of FIELDS) r[k]=fields[k]||'';
+    r.request_no=qr; r.currency=r.currency||'OMR'; r.commission=String(S.get('vm_comm','')||'');
+    pending={r,conf}; showReview();
+  }catch(e){ console.error(e); progErr('Could not read this photo. Check the internet connection for the first use, then try again.'); }
+}
+$('cam').onchange=e=>{handle(e.target.files[0]);e.target.value=''};
+$('gal').onchange=e=>{handle(e.target.files[0]);e.target.value=''};
+
+function showReview(){
+  const {r}=pending;
+  $('qrLine').innerHTML=r.request_no?`<span class="chip ok">QR read</span> <span>Request no <b style="font-family:var(--mono)">${esc(r.request_no)}</b></span>`:`<span class="chip bad">QR not read</span> <span>Retake closer to the QR, or type the request no.</span>`;
+  $('fields').innerHTML=FIELDS.map(([k,l,cls])=>`<div class="f"><label for="f_${k}">${esc(l)}</label><input id="f_${k}" data-k="${k}" class="${cls||''}" value="${esc(r[k])}" autocomplete="off" ${k==='amount'||k==='commission'?'inputmode="decimal"':''}><span class="hint" id="h_${k}"></span></div>`).join('');
+  validate(); $('review').hidden=false; $('review').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function validate(){
+  if(!pending)return; const {r,conf}=pending; let blocked=false;
+  for(const [k] of FIELDS){const c=CHECK[k]?CHECK[k](r[k]):true;const low=conf&&conf[k]!=null&&conf[k]<80&&r[k];
+    const msg=c!==true?c:(low?'Not fully sure. Check against the slip':'');$('f_'+k).classList.toggle('flag',!!msg);$('h_'+k).textContent=msg;
+    if(REQUIRED.includes(k)&&c!==true)blocked=true;}
+  const dup=rows.find(x=>(r.request_no&&x.request_no===r.request_no)||(r.transaction_ref&&x.transaction_ref===r.transaction_ref));
+  $('dupChip').innerHTML=dup?`<span class="chip bad">Already saved (${esc(dup.name_en)})</span>`:'';
+  $('saveBtn').disabled=blocked||!!dup;
+}
+$('fields').addEventListener('input',e=>{const k=e.target.dataset.k;if(!k)return;let v=e.target.value;if(!['name_ar','notes'].includes(k))v=v.trim();if(['passport_no','name_en','bank_ref_1'].includes(k))v=v.toUpperCase();
+  pending.r[k]=v;if(pending.conf)delete pending.conf[k];if(k==='commission')S.set('vm_comm',v);validate()});
+$('discardBtn').onclick=()=>{pending=null;$('review').hidden=true;prog('')};
+$('saveBtn').onclick=()=>{if(!pending)return;rows.push({...pending.r,saved_at:new Date().toISOString()});S.set('vm_rows',rows);pending=null;$('review').hidden=true;render();prog('Saved',1);setTimeout(()=>prog(''),1500)};
+
+const COLS=[['request_no','Request no'],['name_en','Name (EN)'],['name_ar','Name (AR)'],['civil_no','Civil no'],['passport_no','Passport no'],['amount','Amount'],['currency','Currency'],['commission','Commission'],
+ ['status','Status'],['transaction_ref','Transaction ref'],['bank_ref_1','Bank ref (POS)'],['bank_ref_2','Bank ref (no.)'],['card_masked','Card'],['approval_code','Approval code'],['notes','Notes'],['saved_at','Saved at']];
+const num=v=>{const n=parseFloat(v);return isNaN(n)?0:n};
+const fmt=s=>{try{const d=new Date(s);return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})+' '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}catch(e){return s}};
+function render(){
+  $('tCount').textContent=rows.length;$('tFee').textContent=rows.reduce((s,r)=>s+num(r.amount),0).toFixed(3);$('tCom').textContent=rows.reduce((s,r)=>s+num(r.commission),0).toFixed(3);
+  $('empty').hidden=!!rows.length;$('tableWrap').hidden=!rows.length;$('xlsBtn').disabled=!rows.length;$('clearBtn').disabled=!rows.length;
+  $('thead').innerHTML='<tr>'+COLS.map(c=>`<th>${c[1]}</th>`).join('')+'<th></th></tr>';
+  $('tbody').innerHTML=rows.slice().reverse().map(r=>'<tr>'+COLS.map(([k])=>`<td ${k==='name_ar'?'dir="rtl"':''}>${esc(k==='saved_at'?fmt(r[k]):r[k])}</td>`).join('')+`<td><button data-id="${esc(r.saved_at)}">Delete</button></td></tr>`).join('');
+}
+$('tbody').addEventListener('click',e=>{const b=e.target.closest('button[data-id]');if(!b)return;rows=rows.filter(r=>r.saved_at!==b.dataset.id);S.set('vm_rows',rows);render()});
+$('clearBtn').onclick=()=>$('clearConfirm').hidden=false;$('clearNo').onclick=()=>$('clearConfirm').hidden=true;
+$('clearYes').onclick=()=>{rows=[];S.set('vm_rows',rows);$('clearConfirm').hidden=true;render()};
+$('xlsBtn').onclick=()=>{
+  const data=rows.map(r=>COLS.map(([k])=>k==='amount'||k==='commission'?(r[k]===''?'':num(r[k])):k==='saved_at'?fmt(r[k]):String(r[k]??'')));
+  const tot=COLS.map(([k])=>k==='request_no'?'TOTAL':k==='amount'?rows.reduce((s,r)=>s+num(r.amount),0):k==='commission'?rows.reduce((s,r)=>s+num(r.commission),0):'');
+  const ws=XLSX.utils.aoa_to_sheet([COLS.map(c=>c[1]),...data,[],tot]);
+  data.forEach((row,i)=>COLS.forEach(([k],j)=>{if(k!=='amount'&&k!=='commission'){const a=XLSX.utils.encode_cell({r:i+1,c:j});if(ws[a]){ws[a].t='s';ws[a].v=String(ws[a].v)}}}));
+  ws['!cols']=COLS.map(([k])=>({wch:/name/.test(k)?24:/ref/.test(k)?22:14}));
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Visa Medical');
+  const d=new Date(),st=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+'_'+String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0');
+  XLSX.writeFile(wb,'Visa_Medical_'+st+'.xlsx');
+};
+render();
+</script>
+</body>
+</html>
