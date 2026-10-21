@@ -78,7 +78,9 @@ ul{list-style:none;margin:0;padding:0}
   <div class="row" id="countBtns">
     <button class="btn primary" id="startBtn">Start scanning</button>
     <button class="btn" id="undoBtn" disabled>Undo last</button>
+    <button class="btn danger" id="clearBtn" disabled>Delete all</button>
   </div>
+  <div class="confirm" id="clearConfirm" hidden><span>Delete all scanned boxes? This cannot be undone.</span><button class="btn danger" id="clearYes">Delete all</button><button class="btn" id="clearNo">Keep</button></div>
 
   <section id="mapView" hidden style="display:flex;flex-direction:column;gap:10px">
     <p class="note" style="margin:0">Step 1: tap <b>Scan AMSP prcode</b> and scan the sticker QR. Step 2: tap <b>Scan GTIN</b> and scan the box code. Each prcode links to one GTIN only.</p>
@@ -108,12 +110,10 @@ ul{list-style:none;margin:0;padding:0}
 
   <div class="row">
     <button class="btn" id="xlsBtn" disabled>Save Excel</button>
-    <button class="btn danger" id="clearBtn" disabled>New count</button>
   </div>
-  <div class="confirm" id="clearConfirm" hidden><span>Delete all scanned boxes?</span><button class="btn danger" id="clearYes">Delete all</button><button class="btn" id="clearNo">Keep</button></div>
 
   <div id="lots" style="display:flex;flex-direction:column;gap:10px"></div>
-  <p class="note">Scans and product names are kept on this phone until you tap New count.</p>
+  <p class="note">Scans and product names are kept on this phone until you tap Delete all.</p>
   </section>
 </div>
 
