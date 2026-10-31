@@ -121,9 +121,9 @@ h1{font:800 1.15rem var(--display);margin:0}
   <p class="note">The count is kept on this phone until you tap Delete all. Same product + batch + expiry is added to the same line.</p>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.4/dist/iife/reader/index.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script src="vendor/zxing-reader.js"></script>
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="vendor/tesseract.min.js"></script>
 <script>
 // Pack scan core: dot-matrix friendly preprocessing + batch/expiry parsing. Works on {data,width,height} RGBA.
 function pkGray(img){ // ink is dark on any coloured background -> use max channel
@@ -259,6 +259,7 @@ async function pkDotSearch(rb,img,onp){
 if(typeof module!=='undefined')module.exports.pkDotSearch=pkDotSearch;
 </script>
 <script>
+const TESS_OPTS={workerPath:new URL('vendor/worker.min.js',location.href).href,corePath:new URL('vendor/',location.href).href,langPath:new URL('vendor/',location.href).href,gzip:true};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const S={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
@@ -267,9 +268,9 @@ let cur={name:'',prcode:'',barcode:'',batch:'',expiry:'',mfg:''}, unsure={};
 
 // ---------- tools ----------
 toCanvasFn=v=>{const c=document.createElement('canvas');c.width=v.width;c.height=v.height;c.getContext('2d').putImageData(new ImageData(v.data,v.width,v.height),0,0);return c};
-let ocrW=null; async function ocr(){ if(!ocrW){status('Loading text reader (first time downloads ~4 MB)…');ocrW=await Tesseract.createWorker('eng');} return ocrW; }
+let ocrW=null; async function ocr(){ if(!ocrW){status('Loading text reader (first time downloads ~4 MB)…');ocrW=await Tesseract.createWorker('eng',1,TESS_OPTS);} return ocrW; }
 let reader=null, zxReady=null;
-function zx(){ if(!reader){zxReady=Promise.resolve(ZXingWASM.prepareZXingModule({overrides:{locateFile:(p,pre)=>p.endsWith('.wasm')?'https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.4/dist/reader/zxing_reader.wasm':pre+p},fireImmediately:true}));reader=ZXingWASM.readBarcodes} return reader; }
+function zx(){ if(!reader){zxReady=fetch('vendor/zxing_reader.wasm?v=1').then(r=>{if(!r.ok)throw new Error('wasm '+r.status);return r.arrayBuffer()}).then(buf=>ZXingWASM.prepareZXingModule({overrides:{wasmBinary:buf},fireImmediately:true}));reader=ZXingWASM.readBarcodes} return reader; }
 const withTimeout=(p,ms,what)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout: '+what)),ms))]);
 const yieldUI=()=>new Promise(r=>setTimeout(r,0));
 setTimeout(()=>{try{zx()}catch(e){}},300);
@@ -387,7 +388,7 @@ $('photoIn').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!
     const draw=max=>{const k=Math.min(1,max/Math.max(bmp.width,bmp.height)),c=document.createElement('canvas');c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);
       const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(bmp,0,0,c.width,c.height);return x.getImageData(0,0,c.width,c.height)};
     label='Starting code reader';const rb=zx();
-    try{await withTimeout(zxReady,20000,'reader')}catch(x){done('The code reader did not load. Check internet, close and reopen the page.',true);return}
+    try{await withTimeout(zxReady,30000,'reader')}catch(x){reader=null;done('The code reader did not load ('+(x&&x.message||x)+'). Check internet, then tap Photo again.',true);return}
     await yieldUI();
     label='Looking for barcodes';
     const small=draw(1280);

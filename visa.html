@@ -104,9 +104,9 @@ td button{border:0;background:none;color:var(--bad);font:600 .8rem var(--body);c
   <p class="note">Each saved slip uploads to the office sheet automatically. If there is no internet it waits and uploads later. The first slip takes longer while the text reader downloads (about 5 MB, once).</p>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.4/dist/iife/reader/index.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script src="vendor/zxing-reader.js"></script>
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="vendor/tesseract.min.js"></script>
 <script>
 // Shared by browser + node test. worker = tesseract.js worker (eng). img = image source accepted by tesseract.
 async function visaExtract(worker, img, W, H, log){
@@ -184,6 +184,7 @@ async function visaExtract(worker, img, W, H, log){
 
 </script>
 <script>
+const TESS_OPTS={workerPath:new URL('vendor/worker.min.js',location.href).href,corePath:new URL('vendor/',location.href).href,langPath:new URL('vendor/',location.href).href,gzip:true};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const S={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
@@ -200,8 +201,8 @@ const REQUIRED=['agent_code','agent_name','request_no','name_en','passport_no','
 
 // ---------- readers ----------
 let qrReady=null, ocrWorker=null;
-function qrReader(){ if(!qrReady){ZXingWASM.prepareZXingModule({overrides:{locateFile:(p,pre)=>p.endsWith('.wasm')?'https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.4/dist/reader/zxing_reader.wasm':pre+p},fireImmediately:true});qrReady=Promise.resolve(ZXingWASM.readBarcodes)} return qrReady; }
-async function getOCR(onp){ if(!ocrWorker){ ocrWorker=await Tesseract.createWorker('eng',1,{logger:m=>{if(m.status&&onp)onp(m)}}); } return ocrWorker; }
+function qrReader(){ if(!qrReady){ZXingWASM.prepareZXingModule({overrides:{locateFile:(p,pre)=>p.endsWith('.wasm')?new URL('vendor/zxing_reader.wasm',location.href).href:pre+p},fireImmediately:true});qrReady=Promise.resolve(ZXingWASM.readBarcodes)} return qrReady; }
+async function getOCR(onp){ if(!ocrWorker){ ocrWorker=await Tesseract.createWorker('eng',1,{...TESS_OPTS,logger:m=>{if(m.status&&onp)onp(m)}}); } return ocrWorker; }
 
 function prog(text,frac){$('prog').hidden=!text;$('status').textContent=text||'';$('status').className='status';if(frac!=null)$('barFill').style.width=Math.round(frac*100)+'%'}
 function progErr(text){$('prog').hidden=false;$('status').textContent=text;$('status').className='status err'}

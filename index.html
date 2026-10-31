@@ -118,8 +118,8 @@ ul{list-style:none;margin:0;padding:0}
   </section>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.4/dist/iife/reader/index.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="vendor/zxing-reader.js"></script>
+<script src="vendor/xlsx.full.min.js"></script>
 <script>
 const $=id=>document.getElementById(id);
 const S={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
@@ -287,7 +287,7 @@ async function start(){
   try{
     // unlock audio on the tap
     tone(1,1,0);
-    if(!reader){ZXingWASM.prepareZXingModule({overrides:{locateFile:(p,pre)=>p.endsWith('.wasm')?'https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.4/dist/reader/zxing_reader.wasm':pre+p},fireImmediately:true});reader=ZXingWASM.readBarcodes}
+    if(!reader){ZXingWASM.prepareZXingModule({overrides:{locateFile:(p,pre)=>p.endsWith('.wasm')?new URL('vendor/zxing_reader.wasm',location.href).href:pre+p},fireImmediately:true});reader=ZXingWASM.readBarcodes}
     stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080},focusMode:'continuous'}});
     v.srcObject=stream;await v.play();
     track=stream.getVideoTracks()[0];
