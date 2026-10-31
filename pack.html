@@ -268,7 +268,11 @@ let cur={name:'',prcode:'',barcode:'',batch:'',expiry:'',mfg:''}, unsure={};
 // ---------- tools ----------
 toCanvasFn=v=>{const c=document.createElement('canvas');c.width=v.width;c.height=v.height;c.getContext('2d').putImageData(new ImageData(v.data,v.width,v.height),0,0);return c};
 let ocrW=null; async function ocr(){ if(!ocrW){status('Loading text reader (first time downloads ~4 MB)…');ocrW=await Tesseract.createWorker('eng');} return ocrW; }
-let reader=null; function zx(){ if(!reader){ZXingWASM.prepareZXingModule({overrides:{locateFile:(p,pre)=>p.endsWith('.wasm')?'https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.4/dist/reader/zxing_reader.wasm':pre+p},fireImmediately:true});reader=ZXingWASM.readBarcodes} return reader; }
+let reader=null, zxReady=null;
+function zx(){ if(!reader){zxReady=Promise.resolve(ZXingWASM.prepareZXingModule({overrides:{locateFile:(p,pre)=>p.endsWith('.wasm')?'https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.4/dist/reader/zxing_reader.wasm':pre+p},fireImmediately:true}));reader=ZXingWASM.readBarcodes} return reader; }
+const withTimeout=(p,ms,what)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout: '+what)),ms))]);
+const yieldUI=()=>new Promise(r=>setTimeout(r,0));
+setTimeout(()=>{try{zx()}catch(e){}},300);
 function status(t,err){$('status').textContent=t||'';$('status').className='status'+(err?' err':'')}
 let ac=null; function beep(f=1760,ms=110){try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator(),g=ac.createGain();o.frequency.value=f;o.type='square';g.gain.value=.25;o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+ms/1000)}catch(e){}try{navigator.vibrate&&navigator.vibrate(60)}catch(e){}}
 
@@ -376,21 +380,28 @@ $('bCapture').onclick=async()=>{
 
 // photo: phone camera at full quality, search the whole picture
 $('photoIn').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;camOff();
-  try{status('Opening photo…');
+  const t0=Date.now();let label='Opening photo';const tick=setInterval(()=>status(label+'… '+Math.round((Date.now()-t0)/1000)+'s'),500);
+  const done=(m,err)=>{clearInterval(tick);status(m,err)};
+  try{
     let bmp;try{bmp=await createImageBitmap(f,{imageOrientation:'from-image'})}catch(x){bmp=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=URL.createObjectURL(f)})}
-    const k=Math.min(1,2016/Math.max(bmp.width,bmp.height)),c=document.createElement('canvas');c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);
-    c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);const img=c.getContext('2d').getImageData(0,0,c.width,c.height);
-    const rb=zx();status('Looking for barcodes…');
-    const rs=await rb(img,{formats:['EAN13','EAN8','UPCA','UPCE','DataMatrix','Code128','QRCode'],tryHarder:true,tryRotate:true,tryInvert:true,maxNumberOfSymbols:4,textMode:'HRI'}).catch(()=>[]);
+    const draw=max=>{const k=Math.min(1,max/Math.max(bmp.width,bmp.height)),c=document.createElement('canvas');c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);
+      const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(bmp,0,0,c.width,c.height);return x.getImageData(0,0,c.width,c.height)};
+    label='Starting code reader';const rb=zx();
+    try{await withTimeout(zxReady,20000,'reader')}catch(x){done('The code reader did not load. Check internet, close and reopen the page.',true);return}
+    await yieldUI();
+    label='Looking for barcodes';
+    const small=draw(1280);
+    let rs=[];try{rs=await withTimeout(rb(small,{formats:['EAN13','EAN8','UPCA','UPCE','DataMatrix','Code128','QRCode'],tryHarder:true,tryRotate:true,tryInvert:false,maxNumberOfSymbols:4,textMode:'HRI'}),12000,'barcodes')}catch(x){rs=[]}
     const gs=rs.find(r=>r.isValid&&/\(01\)/.test(r.text)&&/\(10\)|\(17\)/.test(r.text));
-    if(gs){onBarcode(gs.text,gs.format);return}
-    status('Looking for a dotted 2D code… 0%');
-    const t=await pkDotSearch(rb,img,fr=>status('Looking for a dotted 2D code… '+Math.round(fr*100)+'%'));
-    if(t){onBarcode(t,'DataMatrix');return}
+    if(gs){done('Barcode, batch and expiry read from the 2D code.');onBarcode(gs.text,gs.format);return}
+    label='Looking for a dotted 2D code';await yieldUI();
+    const img=draw(2016);
+    let t='';try{t=await withTimeout(pkDotSearch(rb,img,fr=>{label='Looking for a dotted 2D code '+Math.round(fr*100)+'%'}),60000,'dotted')}catch(x){}
+    if(t){done('Read from the 2D code.');onBarcode(t,'DataMatrix');return}
     const lin=rs.find(r=>r.isValid&&r.text&&!/\/\//.test(r.text));
-    if(lin){onBarcode(lin.text,lin.format);status('Barcode read. No 2D code found, so do step 2 for LOT / EXP.');return}
-    status('No code found in the photo. Take it closer and flat, with the codes sharp.',true);
-  }catch(x){status('Could not read this photo.',true)}
+    if(lin){done('');onBarcode(lin.text,lin.format);status('Barcode read. No 2D code found, so do step 2 for LOT / EXP.');return}
+    done('No code found in the photo. Take it closer and flat, with the codes sharp.',true);
+  }catch(x){done('Could not read this photo ('+(x&&x.message||x)+').',true)}
 };
 
 // ---------- form ----------
