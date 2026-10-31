@@ -26,7 +26,7 @@ h1{font:800 1.15rem var(--display);margin:0}
 .btn.warn{background:var(--warn);border-color:var(--warn);color:#2a1a00}
 .btn.danger{border-color:var(--bad);color:var(--bad);background:var(--bad-soft)}
 .btn:disabled{opacity:.45}
-.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.steps{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
 .steps .btn{flex-direction:column;padding:12px 6px;font-size:.88rem;line-height:1.2}
 .steps .btn small{font-weight:500;font-size:.72rem;opacity:.85}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
@@ -83,7 +83,9 @@ h1{font:800 1.15rem var(--display);margin:0}
   <div class="steps">
     <button class="btn primary" id="bBar">1 · Barcode<small>auto scan</small></button>
     <button class="btn" id="bLot">2 · LOT / EXP<small>fit in frame</small></button>
+    <label class="btn" for="photoIn" id="bPhoto">📷 Photo<small>full quality, finds the codes</small></label>
     <button class="btn" id="bName">Name<small>only if not found</small></button>
+    <input id="photoIn" type="file" accept="image/*" capture="environment" style="position:absolute;width:1px;height:1px;opacity:0">
   </div>
   <button class="btn warn" id="bCapture" hidden>Capture now</button>
   <div class="status" id="status"></div>
@@ -222,7 +224,7 @@ async function pkReadName(worker,img){
 }
 if(typeof module!=='undefined')module.exports.pkReadName=pkReadName;
 // Dot-printed DataMatrix: join the dots (scale, contrast, threshold, thicken) then decode
-async function pkDotCodes(rb,img){
+async function pkDotCodes(rb,img,quick){
   let gr=pkGray({data:img.data,width:img.width,height:img.height});
   // luminance works better for black dots on light labels; use min of max-channel trick and plain luminance
   const lum=new Float32Array(img.width*img.height);for(let i=0,j=0;j<lum.length;i+=4,j++)lum[j]=(img.data[i]*299+img.data[i+1]*587+img.data[i+2]*114)/1000;
@@ -230,8 +232,8 @@ async function pkDotCodes(rb,img){
   const W=Math.round(img.width*scale),H=Math.round(img.height*scale);
   const base=pkStretch(pkResize({g:lum,width:img.width,height:img.height},W,H));
   const opts={formats:['DataMatrix','QRCode'],tryHarder:true,tryRotate:true,tryInvert:true,maxNumberOfSymbols:2,textMode:'HRI'};
-  for(const blur of [0,1,2]){const b=blur?pkStretch(pkBoxBlur(base,blur)):base;
-    for(const t of [140,110,170]){
+  for(const blur of (quick?[0]:[0,1,2])){const b=blur?pkStretch(pkBoxBlur(base,blur)):base;
+    for(const t of (quick?[140]:[140,110,170])){
       const bin={g:b.g.map(p=>p>t?255:0),width:W,height:H};
       for(const v of [bin,pkErode(bin)]){const d=new Uint8ClampedArray(W*H*4);for(let i=0;i<v.g.length;i++){d[i*4]=d[i*4+1]=d[i*4+2]=v.g[i];d[i*4+3]=255}
         try{const rs=await rb({data:d,width:W,height:H,colorSpace:'srgb'},opts);const r=rs.find(z=>z.isValid&&z.text&&/\(01\)|\(10\)|\(17\)/.test(z.text));if(r)return r.text}catch(e){}}
@@ -242,6 +244,19 @@ function pkGS1(t){const g=k=>{const m=t.match(new RegExp('\\('+k+'\\)([^()]+)'))
   const d=s=>/^\d{6}$/.test(s)?(s.slice(2,4)+'/'+(2000+ +s.slice(0,2))):'';
   return {gtin:g('01'),batch:g('10'),expiry:d(g('17')),mfg:d(g('11')),serial:g('21')};}
 if(typeof module!=='undefined'){module.exports.pkDotCodes=pkDotCodes;module.exports.pkGS1=pkGS1;}
+// Search a whole photo for a dotted 2D code by scanning overlapping tiles
+async function pkDotSearch(rb,img,onp){
+  const T=Math.round(Math.min(img.width,img.height)*0.4), step=Math.round(T*0.5), tiles=[];
+  for(let y=0;y<img.height-T*0.5;y+=step)for(let x=0;x<img.width-T*0.5;x+=step)tiles.push([x,y,Math.min(T,img.width-x),Math.min(T,img.height-y)]);
+  for(let i=0;i<tiles.length;i++){const [x,y,w,h]=tiles[i];const d=new Uint8ClampedArray(w*h*4);
+    for(let r=0;r<h;r++)d.set(img.data.subarray(((y+r)*img.width+x)*4,((y+r)*img.width+x+w)*4),r*w*4);
+    tiles[i].img={data:d,width:w,height:h};}
+  for(const quick of [true,false])for(let i=0;i<tiles.length;i++){ // fast pass over all tiles first, then the thorough pass
+    if(onp)onp(((quick?0:1)+(i+1)/tiles.length)/2);
+    const t=await pkDotCodes(rb,tiles[i].img,quick);if(t)return t;}
+  return '';
+}
+if(typeof module!=='undefined')module.exports.pkDotSearch=pkDotSearch;
 </script>
 <script>
 const $=id=>document.getElementById(id);
@@ -357,6 +372,25 @@ $('bCapture').onclick=async()=>{
     else{status('Reading name…');w=await ocr();const n=await pkReadName(w,img);if(n){cur.name=n;unsure.name=true}status(n?'Check the name.':'Could not read the name. Type it.',!n)}
     fill();
   }catch(e){status('Reading failed. Check internet on first use, then try again.',true)}
+};
+
+// photo: phone camera at full quality, search the whole picture
+$('photoIn').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;camOff();
+  try{status('Opening photo…');
+    let bmp;try{bmp=await createImageBitmap(f,{imageOrientation:'from-image'})}catch(x){bmp=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=URL.createObjectURL(f)})}
+    const k=Math.min(1,2016/Math.max(bmp.width,bmp.height)),c=document.createElement('canvas');c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);
+    c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);const img=c.getContext('2d').getImageData(0,0,c.width,c.height);
+    const rb=zx();status('Looking for barcodes…');
+    const rs=await rb(img,{formats:['EAN13','EAN8','UPCA','UPCE','DataMatrix','Code128','QRCode'],tryHarder:true,tryRotate:true,tryInvert:true,maxNumberOfSymbols:4,textMode:'HRI'}).catch(()=>[]);
+    const gs=rs.find(r=>r.isValid&&/\(01\)/.test(r.text)&&/\(10\)|\(17\)/.test(r.text));
+    if(gs){onBarcode(gs.text,gs.format);return}
+    status('Looking for a dotted 2D code… 0%');
+    const t=await pkDotSearch(rb,img,fr=>status('Looking for a dotted 2D code… '+Math.round(fr*100)+'%'));
+    if(t){onBarcode(t,'DataMatrix');return}
+    const lin=rs.find(r=>r.isValid&&r.text&&!/\/\//.test(r.text));
+    if(lin){onBarcode(lin.text,lin.format);status('Barcode read. No 2D code found, so do step 2 for LOT / EXP.');return}
+    status('No code found in the photo. Take it closer and flat, with the codes sharp.',true);
+  }catch(x){status('Could not read this photo.',true)}
 };
 
 // ---------- form ----------
