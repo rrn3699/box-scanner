@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>NSH Pack Scan</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{--bg:#0f1513;--surface:#18211e;--ink:#e4ece8;--muted:#97a6a0;--line:#2b3733;--accent:#3fbf9b;--accent-ink:#06231b;--warn:#f0b35a;--warn-soft:#3a2b14;--bad:#f08a8a;--bad-soft:#3a1b1b;--ok-soft:#183a31;
+--display:"Archivo",system-ui,sans-serif;--body:"Public Sans",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace;color-scheme:dark}
+*{box-sizing:border-box}[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px}
+.wrap{max-width:760px;margin:0 auto;padding:max(12px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) 40px max(14px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:12px}
+h1{font:800 1.15rem var(--display);margin:0}
+.nav{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px}
+.nav a{color:var(--muted);text-decoration:none;font:600 .82rem var(--body);padding:10px 4px;border-radius:9px;text-align:center}
+.nav a.on{background:var(--accent);color:var(--accent-ink)}
+.cam{position:relative;border-radius:14px;overflow:hidden;background:#000;aspect-ratio:4/3;width:100%}
+.cam video{width:100%;height:100%;object-fit:cover;display:block}
+.guide{position:absolute;left:8%;right:8%;top:30%;height:40%;border:3px solid var(--warn);border-radius:10px;box-shadow:0 0 0 9999px rgba(0,0,0,.35);pointer-events:none}
+.guide.bar{border-color:rgba(255,255,255,.6)}
+.cam .msg{position:absolute;left:10px;right:10px;bottom:10px;background:rgba(0,0,0,.7);padding:8px 10px;border-radius:10px;font:500 .9rem var(--body);text-align:center}
+.cam .idle{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--muted);padding:20px}
+.btn{appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:600 .95rem var(--body);padding:12px 14px;border-radius:10px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.warn{background:var(--warn);border-color:var(--warn);color:#2a1a00}
+.btn.danger{border-color:var(--bad);color:var(--bad);background:var(--bad-soft)}
+.btn:disabled{opacity:.45}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.steps .btn{flex-direction:column;padding:12px 6px;font-size:.88rem;line-height:1.2}
+.steps .btn small{font-weight:500;font-size:.72rem;opacity:.85}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px 12px}
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f label{font:700 .68rem var(--display);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.f input{font:500 1rem var(--mono);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 10px;width:100%;min-width:0}
+.f input.flag{border-color:var(--warn);background:var(--warn-soft)}
+.f .hint{font-size:.74rem;color:var(--warn);min-height:1em}
+.f.wide{grid-column:1/-1}
+.qty{display:flex;align-items:center;gap:10px}
+.qty button{width:56px;height:56px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:800 1.6rem var(--display);cursor:pointer}
+.qty input{width:90px;text-align:center;font:800 1.8rem var(--display);background:transparent;border:0;color:var(--ink)}
+.chip{display:inline-block;font:600 .74rem var(--body);padding:3px 9px;border-radius:999px}
+.chip.ok{background:var(--ok-soft);color:var(--accent)}.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.tally{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.t{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px}
+.t b{display:block;font:800 1.6rem var(--display);font-variant-numeric:tabular-nums}
+.t span{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.list{display:flex;flex-direction:column;gap:8px}
+.item{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center}
+.item .nm{font-weight:600;min-width:0}
+.item .meta{font:400 .8rem var(--mono);color:var(--muted);grid-column:1}
+.item .cnt{grid-row:1/3;grid-column:2;display:flex;align-items:center;gap:6px}
+.item .cnt b{font:800 1.5rem var(--display);min-width:2.2ch;text-align:center}
+.item .cnt button{width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:800 1.2rem var(--display);cursor:pointer}
+.item .del{grid-column:1/-1;justify-self:start;border:0;background:none;color:var(--bad);font:600 .8rem var(--body);padding:0;cursor:pointer}
+.status{font-size:.9rem;color:var(--muted)} .status.err{color:var(--bad)}
+.confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.note{font-size:.82rem;color:var(--muted);margin:0}
+.empty{border:1px dashed var(--line);border-radius:12px;padding:16px;color:var(--muted);text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="row" style="justify-content:space-between"><h1>NSH Pack Scan</h1><button class="btn" id="torch" hidden>Light</button></div>
+  <nav class="nav"><a href="./#count">Count</a><a href="./#map">Map</a><a href="visa.html">Visa</a><a class="on" href="pack.html">Pack scan</a></nav>
+
+  <section class="panel" id="pinPanel" hidden>
+    <b>Enter the team PIN (once)</b>
+    <p class="note">The PIN unlocks the AMSP product list on this phone so names and prcodes fill in from the barcode.</p>
+    <div class="row"><input id="pinIn" inputmode="numeric" autocomplete="off" style="font:600 1.2rem var(--mono);padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:160px" placeholder="PIN"><button class="btn primary" id="pinBtn">Unlock</button><button class="btn" id="pinSkip">Skip</button></div>
+    <p class="status" id="pinMsg"></p>
+  </section>
+
+  <div class="cam" id="cam">
+    <video id="v" playsinline muted></video>
+    <div class="guide bar" id="guide" hidden></div>
+    <div class="idle" id="idle">Tap step 1 to scan the barcode.</div>
+    <div class="msg" id="msg" hidden></div>
+  </div>
+
+  <div class="steps">
+    <button class="btn primary" id="bBar">1 · Barcode<small>auto scan</small></button>
+    <button class="btn" id="bLot">2 · LOT / EXP<small>fit in frame</small></button>
+    <button class="btn" id="bName">Name<small>only if not found</small></button>
+  </div>
+  <button class="btn warn" id="bCapture" hidden>Capture now</button>
+  <div class="status" id="status"></div>
+
+  <section class="panel" id="form">
+    <div id="found"></div>
+    <div class="fields">
+      <div class="f wide"><label for="f_name">Product name</label><input id="f_name" data-k="name" autocomplete="off"><span class="hint" id="h_name"></span></div>
+      <div class="f"><label for="f_prcode">AMSP prcode</label><input id="f_prcode" data-k="prcode" inputmode="numeric" autocomplete="off"><span class="hint" id="h_prcode"></span></div>
+      <div class="f"><label for="f_barcode">Barcode</label><input id="f_barcode" data-k="barcode" inputmode="numeric" autocomplete="off"><span class="hint" id="h_barcode"></span></div>
+      <div class="f"><label for="f_batch">Batch / LOT</label><input id="f_batch" data-k="batch" autocomplete="off"><span class="hint" id="h_batch"></span></div>
+      <div class="f"><label for="f_expiry">Expiry (MM/YYYY)</label><input id="f_expiry" data-k="expiry" autocomplete="off"><span class="hint" id="h_expiry"></span></div>
+      <div class="f"><label for="f_mfg">MFG (optional)</label><input id="f_mfg" data-k="mfg" autocomplete="off"><span class="hint" id="h_mfg"></span></div>
+    </div>
+    <div class="row" style="justify-content:space-between">
+      <div class="qty"><button id="qMinus" aria-label="Less">−</button><input id="qty" type="number" inputmode="numeric" min="1" value="1" aria-label="Quantity"><button id="qPlus" aria-label="More">+</button></div>
+      <div class="row"><button class="btn" id="bClear">Clear</button><button class="btn primary" id="bAdd" disabled>Add to count</button></div>
+    </div>
+  </section>
+
+  <div class="tally">
+    <div class="t"><span>Total packs</span><b id="tPacks">0</b></div>
+    <div class="t"><span>Lines</span><b id="tLines">0</b></div>
+    <div class="t"><span>Products</span><b id="tProd">0</b></div>
+  </div>
+  <div class="row">
+    <button class="btn" id="xlsBtn" disabled>Save Excel</button>
+    <button class="btn danger" id="clrAll" disabled>Delete all</button>
+  </div>
+  <div class="confirm" id="clrConfirm" hidden><span>Delete the whole count? This cannot be undone.</span><button class="btn danger" id="clrYes">Delete all</button><button class="btn" id="clrNo">Keep</button></div>
+  <div class="empty" id="empty">Nothing counted yet.</div>
+  <div class="list" id="list"></div>
+  <p class="note">The count is kept on this phone until you tap Delete all. Same product + batch + expiry is added to the same line.</p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.4/dist/iife/reader/index.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script>
+// Pack scan core: dot-matrix friendly preprocessing + batch/expiry parsing. Works on {data,width,height} RGBA.
+function pkGray(img){ // ink is dark on any coloured background -> use max channel
+  const {data,width,height}=img,g=new Float32Array(width*height);
+  for(let i=0,j=0;j<g.length;i+=4,j++){const r=data[i],gg=data[i+1],b=data[i+2];g[j]=r>gg?(r>b?r:b):(gg>b?gg:b);}
+  return {g,width,height};
+}
+function pkResize(src,nw,nh){ // bilinear on gray
+  const {g,width:w,height:h}=src,o=new Float32Array(nw*nh);
+  for(let y=0;y<nh;y++){let fy=(y+.5)*h/nh-.5;fy=Math.max(0,Math.min(h-1.001,fy));const y0=fy|0,ay=fy-y0;
+    for(let x=0;x<nw;x++){let fx=(x+.5)*w/nw-.5;fx=Math.max(0,Math.min(w-1.001,fx));const x0=fx|0,ax=fx-x0,i=y0*w+x0;
+      o[y*nw+x]=(g[i]*(1-ax)+g[i+1]*ax)*(1-ay)+(g[i+w]*(1-ax)+g[i+w+1]*ax)*ay;}}
+  return {g:o,width:nw,height:nh};
+}
+function pkBoxBlur(src,r){ if(r<1)return src; const {g,width:w,height:h}=src;let a=Float32Array.from(g),b=new Float32Array(g.length);
+  for(let pass=0;pass<3;pass++){
+    for(let y=0;y<h;y++){let s=0;const row=y*w;for(let x=-r;x<=r;x++)s+=a[row+Math.min(w-1,Math.max(0,x))];
+      for(let x=0;x<w;x++){b[row+x]=s/(2*r+1);s+=a[row+Math.min(w-1,x+r+1)]-a[row+Math.max(0,x-r)];}}
+    for(let x=0;x<w;x++){let s=0;for(let y=-r;y<=r;y++)s+=b[Math.min(h-1,Math.max(0,y))*w+x];
+      for(let y=0;y<h;y++){a[y*w+x]=s/(2*r+1);s+=b[Math.min(h-1,y+r+1)*w+x]-b[Math.max(0,y-r)*w+x];}}
+  }
+  return {g:a,width:w,height:h};
+}
+function pkOtsu(g){const h=new Float64Array(256);for(const v of g)h[Math.max(0,Math.min(255,v|0))]++;const n=g.length;let sum=0;for(let i=0;i<256;i++)sum+=i*h[i];
+  let sB=0,wB=0,best=0,t=128;for(let i=0;i<256;i++){wB+=h[i];if(!wB)continue;const wF=n-wB;if(!wF)break;sB+=i*h[i];const mB=sB/wB,mF=(sum-sB)/wF,v=wB*wF*(mB-mF)*(mB-mF);if(v>best){best=v;t=i}}return t;}
+function pkStretch(src){const {g}=src;const s=Float32Array.from(g).sort();const lo=s[(s.length*.02)|0],hi=s[(s.length*.98)|0],k=255/Math.max(1,hi-lo);
+  const o=new Float32Array(g.length);for(let i=0;i<g.length;i++)o[i]=Math.max(0,Math.min(255,(g[i]-lo)*k));return {g:o,width:src.width,height:src.height};}
+function pkErode(src){ // grow dark ink by 1px (min filter 3x3)
+  const {g,width:w,height:h}=src,o=new Float32Array(g.length);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){let m=255;for(let dy=-1;dy<=1;dy++){const yy=Math.min(h-1,Math.max(0,y+dy));for(let dx=-1;dx<=1;dx++){const v=g[yy*w+Math.min(w-1,Math.max(0,x+dx))];if(v<m)m=v}}o[y*w+x]=m}
+  return {g:o,width:w,height:h};}
+// Build OCR-ready variants (RGBA ImageData-like) for a crop
+function pkVariants(img){
+  let gr=pkGray(img); const H=600, W=Math.max(200,Math.round(img.width*H/img.height)); gr=pkResize(gr,W,H);
+  const out=[];
+  for(const r of [0,2,3,4,5,6]){ // 0 = normal print, larger = dot-matrix
+    let v=pkStretch(pkBoxBlur(gr,r)); const t=pkOtsu(v.g); const bin={g:v.g.map(p=>p>t?255:0),width:W,height:H};
+    const fin=r?pkErode(bin):bin; const d=new Uint8ClampedArray(W*H*4);
+    for(let i=0;i<fin.g.length;i++){d[i*4]=d[i*4+1]=d[i*4+2]=fin.g[i];d[i*4+3]=255}
+    out.push({data:d,width:W,height:H,blur:r});
+  }
+  return out;
+}
+const PK_MON={JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12};
+function pkDates(s){ // returns [{y,m,d,txt}]
+  const out=[],add=(y,m,d,txt)=>{y=+y;m=+m;if(y<100)y+=2000;if(m>=1&&m<=12&&y>=2015&&y<=2045)out.push({y,m,d:d?+d:0,txt})};
+  let m;
+  const re1=/\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})\b/g;while((m=re1.exec(s)))add(m[3],m[2],m[1],m[0]);
+  const s2=s.replace(re1,' ');
+  const re2=/\b(\d{4})[\/\-.](\d{1,2})\b/g;while((m=re2.exec(s2)))add(m[1],m[2],0,m[0]);
+  const re3=/\b(\d{1,2})[\/\-.](\d{4}|\d{2})\b/g;while((m=re3.exec(s2.replace(re2,' '))))add(m[2],m[1],0,m[0]);
+  const re5=/\b(\d{2})\s?(20[2-4]\d)\b/g;while((m=re5.exec(s2.replace(re2,' ').replace(re3,' '))))add(m[2],m[1],0,m[0]);
+  const re4=/\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*[\s\/\-.]*(\d{2,4})\b/g;while((m=re4.exec(s)))add(m[2],PK_MON[m[1]],0,m[0]);
+  return out;
+}
+function pkParse(text){
+  const lines=String(text||'').toUpperCase().split(/\n+/).map(l=>l.replace(/\s+/g,' ').trim()).filter(Boolean);
+  let batch='',exp=null,mfg=null;
+  for(const l of lines){
+    const b=l.match(/^(?:L[O0D]T|LDT|L0T|BATCH|BAT|B\.? ?NO\.?|BN|LOT NO\.?)\s*[:.#]?\s*([A-Z0-9][A-Z0-9\-\/]{2,})/);
+    if(b&&!batch){let v=b[1];const dg=(v.match(/\d/g)||[]).length;if(dg>=v.length-2)v=v.replace(/O/g,'0').replace(/[IL]/g,'1');batch=v;}
+    const ds=pkDates(l);
+    if(ds.length){
+      if(/^(E[XYKV]?[PFEB]|EX|EXP|USE|BB|BEST)/.test(l))exp=ds[ds.length-1];
+      else if(/^(M[FH]?[GCE6]|MF|MFG|MFD|PRD|PROD|M\.)/.test(l))mfg=ds[0];
+    }
+  }
+  if(!exp){const all=lines.flatMap(pkDates);if(all.length){all.sort((a,b)=>(a.y*13+a.m)-(b.y*13+b.m));exp=all[all.length-1];if(all.length>1&&!mfg)mfg=all[0];}}
+  const now=new Date().getFullYear();if(exp&&exp.y<now-1)exp=null;
+  const f=d=>d?String(d.m).padStart(2,'0')+'/'+d.y:'';
+  return {batch,expiry:f(exp),mfg:f(mfg),exp4:!!(exp&&/\d{4}/.test(exp.txt)),mfg4:!!(mfg&&/\d{4}/.test(mfg.txt))};
+}
+// Run OCR on all variants and vote. worker = tesseract worker
+async function pkReadBatchExpiry(worker,img){
+  const vs=pkVariants(img),res=[];
+  await worker.setParameters({tessedit_pageseg_mode:'6',tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/.: '});
+  for(const v of vs){const {data}=await worker.recognize(v.width?toCanvasFn(v):v);res.push({blur:v.blur,text:data.text,...pkParse(data.text)});}
+  await worker.setParameters({tessedit_pageseg_mode:'11',tessedit_char_whitelist:''});
+  const vote=(k,w4)=>{const c={};res.forEach(r=>{if(r[k])c[r[k]]=(c[r[k]]||0)+(w4&&r[w4]?2:1)});
+    // a longer reading that contains a shorter one gets its votes (e.g. 05026 beats 502)
+    const sc=Object.keys(c).map(v=>[v,Object.entries(c).reduce((s,[u,n])=>s+(v.includes(u)?n:0),0),c[v]]);
+    sc.sort((a,b)=>b[1]-a[1]||b[0].length-a[0].length);const best=sc[0];return best?{v:best[0],n:best[1]}:{v:'',n:0}};
+  const b=vote('batch'),e=vote('expiry','exp4'),m=vote('mfg','mfg4');
+  return {batch:b.v,expiry:e.v,mfg:m.v,sure:{batch:b.n>=3,expiry:e.n>=3},raw:res};
+}
+let toCanvasFn=v=>v; // browser replaces with ImageData->canvas
+if(typeof module!=='undefined')module.exports={pkVariants,pkParse,pkReadBatchExpiry,setToCanvas:f=>{toCanvasFn=f}};
+// Product name = biggest letters in the frame
+async function pkReadName(worker,img){
+  await worker.setParameters({tessedit_pageseg_mode:'11',tessedit_char_whitelist:''});
+  // coloured letters on a light pack -> darkest channel makes them black
+  const d=new Uint8ClampedArray(img.data.length);for(let i=0;i<d.length;i+=4){const v=Math.min(img.data[i],img.data[i+1],img.data[i+2]);d[i]=d[i+1]=d[i+2]=v;d[i+3]=255}
+  const {data}=await worker.recognize(toCanvasFn({data:d,width:img.width,height:img.height}),{},{blocks:true});
+  const ws=[];for(const b of data.blocks||[])for(const p of b.paragraphs)for(const l of p.lines)for(const w of l.words){const t=w.text.replace(/[^A-Za-z0-9+\-]/g,'');if(t.length>=2&&/[A-Za-z]/.test(t)&&w.confidence>30)ws.push({t,h:w.bbox.y1-w.bbox.y0,y:(w.bbox.y0+w.bbox.y1)/2,x:w.bbox.x0});}
+  if(!ws.length)return '';
+  const mx=Math.max(...ws.map(w=>w.h));const big=ws.filter(w=>w.h>=mx*.55).sort((a,b)=>Math.abs(a.y-b.y)<mx*.6?a.x-b.x:a.y-b.y);
+  return big.map(w=>w.t).join(' ').toUpperCase().slice(0,60);
+}
+if(typeof module!=='undefined')module.exports.pkReadName=pkReadName;
+
+</script>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const S={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+let lines=S.get('pk_lines',[]); let myNames=S.get('pk_names',{}); let products=null;
+let cur={name:'',prcode:'',barcode:'',batch:'',expiry:'',mfg:''}, unsure={};
+
+// ---------- tools ----------
+toCanvasFn=v=>{const c=document.createElement('canvas');c.width=v.width;c.height=v.height;c.getContext('2d').putImageData(new ImageData(v.data,v.width,v.height),0,0);return c};
+let ocrW=null; async function ocr(){ if(!ocrW){status('Loading text reader (first time downloads ~4 MB)…');ocrW=await Tesseract.createWorker('eng');} return ocrW; }
+let reader=null; function zx(){ if(!reader){ZXingWASM.prepareZXingModule({overrides:{locateFile:(p,pre)=>p.endsWith('.wasm')?'https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.4/dist/reader/zxing_reader.wasm':pre+p},fireImmediately:true});reader=ZXingWASM.readBarcodes} return reader; }
+function status(t,err){$('status').textContent=t||'';$('status').className='status'+(err?' err':'')}
+let ac=null; function beep(f=1760,ms=110){try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator(),g=ac.createGain();o.frequency.value=f;o.type='square';g.gain.value=.25;o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+ms/1000)}catch(e){}try{navigator.vibrate&&navigator.vibrate(60)}catch(e){}}
+
+// ---------- product list (encrypted with team PIN) ----------
+async function unlock(pin){
+  const buf=new Uint8Array(await (await fetch('products.enc?v=1')).arrayBuffer());
+  const salt=buf.slice(0,16),iv=buf.slice(16,28),ct=buf.slice(28);
+  const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(pin),'PBKDF2',false,['deriveKey']);
+  const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:200000,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['decrypt']);
+  const gz=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,ct);
+  const txt=await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+  return JSON.parse(txt);
+}
+async function loadProducts(){
+  const pin=S.get('nsh_pin','')||(S.get('vm_cfg',{}).pin||'');
+  if(!pin){$('pinPanel').hidden=false;return}
+  try{products=await unlock(pin);$('pinPanel').hidden=true}catch(e){$('pinPanel').hidden=false;$('pinMsg').textContent='Saved PIN did not work. Enter it again.'}
+}
+$('pinBtn').onclick=async()=>{const p=$('pinIn').value.trim();if(!p)return;$('pinMsg').textContent='Unlocking…';
+  try{products=await unlock(p);S.set('nsh_pin',p);$('pinPanel').hidden=true;status('Product list unlocked: '+Object.keys(products).length+' products.');if(cur.barcode)lookup(cur.barcode)}
+  catch(e){$('pinMsg').textContent='Wrong PIN.'}};
+$('pinSkip').onclick=()=>$('pinPanel').hidden=true;
+function lookup(code){
+  const k=String(code).replace(/^0+/,'');const p=products&&products[k];const mine=myNames[k];
+  if(p){cur.prcode=p[0];cur.name=p[1];$('found').innerHTML='<span class="chip ok">Found in AMSP</span>';}
+  else if(mine){cur.prcode=mine[0]||'';cur.name=mine[1]||'';$('found').innerHTML='<span class="chip ok">Name saved on this phone</span>';}
+  else {$('found').innerHTML='<span class="chip warn">Not in AMSP list. Type the name or tap Name to read it.</span>';}
+  fill();
+}
+
+// ---------- camera ----------
+let stream=null,track=null,mode=null,running=false;const v=$('v');
+async function camOn(){
+  if(stream)return true;
+  try{stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}});
+    v.srcObject=stream;await v.play();track=stream.getVideoTracks()[0];
+    try{const c=track.getCapabilities&&track.getCapabilities();if(c&&c.torch)$('torch').hidden=false;if(c&&c.focusMode&&c.focusMode.includes('continuous'))await track.applyConstraints({advanced:[{focusMode:'continuous'}]})}catch(e){}
+    $('idle').hidden=true;return true}
+  catch(e){$('idle').hidden=false;$('idle').textContent='Camera could not start. Allow camera access for this page, then try again.';return false}
+}
+function camOff(){running=false;mode=null;try{stream&&stream.getTracks().forEach(t=>t.stop())}catch(e){}stream=null;$('torch').hidden=true;$('guide').hidden=true;$('bCapture').hidden=true;$('msg').hidden=true;$('idle').hidden=false;
+  $('bBar').textContent='';$('bBar').innerHTML='1 · Barcode<small>auto scan</small>';}
+let torchOn=false;$('torch').onclick=async()=>{try{torchOn=!torchOn;await track.applyConstraints({advanced:[{torch:torchOn}]})}catch(e){}};
+function msg(t){$('msg').hidden=!t;$('msg').textContent=t||''}
+// crop guide area from the live video at full resolution
+function grabGuide(){
+  const cam=$('cam').getBoundingClientRect(),g=$('guide').getBoundingClientRect(),vw=v.videoWidth,vh=v.videoHeight;
+  const sc=Math.max(cam.width/vw,cam.height/vh),ox=(cam.width-vw*sc)/2,oy=(cam.height-vh*sc)/2;
+  const x=Math.max(0,(g.left-cam.left-ox)/sc),y=Math.max(0,(g.top-cam.top-oy)/sc),w=Math.min(vw-x,g.width/sc),h=Math.min(vh-y,g.height/sc);
+  const c=document.createElement('canvas');c.width=Math.round(w);c.height=Math.round(h);c.getContext('2d').drawImage(v,x,y,w,h,0,0,c.width,c.height);
+  return c.getContext('2d').getImageData(0,0,c.width,c.height);
+}
+
+// step 1: barcode (auto)
+$('bBar').onclick=async()=>{
+  if(mode==='bar'){camOff();return}
+  if(!(await camOn()))return; mode='bar';running=true;$('guide').hidden=false;$('guide').className='guide bar';$('bCapture').hidden=true;
+  $('bBar').innerHTML='Stop<small>scanning…</small>';msg('Point at the barcode');
+  const rb=zx(),cv=document.createElement('canvas'),cx=cv.getContext('2d',{willReadFrequently:true});
+  const loop=async()=>{ if(!running||mode!=='bar')return;
+    if(v.readyState>=2){cv.width=v.videoWidth;cv.height=v.videoHeight;cx.drawImage(v,0,0);
+      try{const rs=await rb(cx.getImageData(0,0,cv.width,cv.height),{formats:['EAN13','EAN8','UPCA','UPCE','DataMatrix','Code128','QRCode'],tryHarder:true,tryRotate:true,tryInvert:true,maxNumberOfSymbols:2,textMode:'HRI'});
+        const r=rs.find(z=>z.isValid&&z.text&&!/\/\//.test(z.text)); if(r){onBarcode(r.text,r.format);return}}catch(e){}}
+    requestAnimationFrame(loop)};
+  loop();
+};
+function onBarcode(t,fmt){
+  beep();camOff();
+  let code=t.trim();const gs=t.match(/\(01\)(\d{14})/);
+  if(gs){code=gs[1];const b=t.match(/\(10\)([^()]+)/),e=t.match(/\(17\)(\d{6})/);
+    if(b){cur.batch=b[1];unsure.batch=false}
+    if(e){const y=2000+ +e[1].slice(0,2),m=e[1].slice(2,4);cur.expiry=m+'/'+y;unsure.expiry=false}}
+  cur.barcode=code.replace(/^0+(?=\d{8})/,'');
+  status(gs&&cur.batch?'Barcode, batch and expiry read from the 2D code.':'Barcode read. Now step 2: LOT / EXP.');
+  lookup(cur.barcode);
+}
+
+// step 2 & name: capture inside frame
+async function captureMode(m){
+  if(mode===m){camOff();return}
+  if(!(await camOn()))return; mode=m;running=false;$('guide').hidden=false;$('guide').className='guide';
+  $('bCapture').hidden=false;$('bCapture').textContent=m==='lot'?'Capture LOT / EXP':'Capture name';
+  msg(m==='lot'?'Fit only the LOT / EXP print inside the yellow frame, hold still':'Fit the product name inside the frame');
+}
+$('bLot').onclick=()=>captureMode('lot');
+$('bName').onclick=()=>captureMode('name');
+$('bCapture').onclick=async()=>{
+  const m=mode;const img=grabGuide();beep(1200,60);camOff();
+  try{const w=await ocr();
+    if(m==='lot'){status('Reading LOT / EXP…');const r=await pkReadBatchExpiry(w,img);
+      if(r.batch){cur.batch=r.batch;unsure.batch=!r.sure.batch} if(r.expiry){cur.expiry=r.expiry;unsure.expiry=!r.sure.expiry} if(r.mfg)cur.mfg=r.mfg;
+      status(r.batch||r.expiry?'Check batch and expiry against the pack.':'Could not read it. Move closer, keep it flat, or type it.',!(r.batch||r.expiry));}
+    else{status('Reading name…');const n=await pkReadName(w,img);if(n){cur.name=n;unsure.name=true}status(n?'Check the name.':'Could not read the name. Type it.',!n)}
+    fill();
+  }catch(e){status('Reading failed. Check internet on first use, then try again.',true)}
+};
+
+// ---------- form ----------
+const CHECK={name:v=>!!v||'Name needed',barcode:v=>!v||/^\d{8,14}$/.test(v)||'Check barcode',batch:v=>!!v||'Batch needed',expiry:v=>/^(0[1-9]|1[0-2])\/20\d{2}$/.test(v)||'Use MM/YYYY'};
+function fill(){for(const k in cur){const i=$('f_'+k);if(i&&i.value!==cur[k])i.value=cur[k]}validate()}
+function validate(){let ok=true;for(const k in cur){const i=$('f_'+k);if(!i)continue;const c=CHECK[k]?CHECK[k](cur[k]):true;const msg=c!==true?c:(unsure[k]?'Not fully sure. Check the pack':'');
+  i.classList.toggle('flag',!!msg);$('h_'+k).textContent=msg;if(c!==true)ok=false}
+  if(!(cur.barcode||cur.prcode))ok=false;$('bAdd').disabled=!ok;}
+document.querySelectorAll('#form input[data-k]').forEach(i=>i.addEventListener('input',()=>{let val=i.value;const k=i.dataset.k;if(k!=='name')val=val.trim().toUpperCase();
+  if(k==='expiry')val=val.replace(/^(\d{2})[-.\s](\d{4})$/,'$1/$2').replace(/^(\d{2})\/?(\d{2})$/,'$1/20$2');cur[k]=val;unsure[k]=false;validate()}));
+document.querySelectorAll('#form input[data-k]').forEach(i=>i.addEventListener('change',()=>{if(i.dataset.k==='expiry'){i.value=cur.expiry}}));
+$('qMinus').onclick=()=>{$('qty').value=Math.max(1,(+$('qty').value||1)-1)};
+$('qPlus').onclick=()=>{$('qty').value=(+$('qty').value||0)+1};
+$('bClear').onclick=()=>{cur={name:'',prcode:'',barcode:'',batch:'',expiry:'',mfg:''};unsure={};$('qty').value=1;$('found').innerHTML='';status('');fill()};
+$('bAdd').onclick=()=>{
+  const q=Math.max(1,parseInt($('qty').value,10)||1);
+  if(cur.barcode&&!(products&&products[cur.barcode.replace(/^0+/,'')])){myNames[cur.barcode.replace(/^0+/,'')]=[cur.prcode,cur.name];S.set('pk_names',myNames)}
+  const key=[cur.barcode||cur.prcode,cur.batch,cur.expiry].join('|');const ex=lines.find(l=>l.key===key);
+  if(ex){ex.qty+=q;ex.at=new Date().toISOString()}else lines.push({key,...cur,qty:q,at:new Date().toISOString()});
+  S.set('pk_lines',lines);beep(1760,80);setTimeout(()=>beep(1760,80),130);
+  status(`Added ${q} × ${cur.name} (${cur.batch}, ${cur.expiry})`);
+  const keepBar=cur.barcode;$('bClear').onclick();render();
+};
+
+// ---------- list ----------
+function render(){
+  const tot=lines.reduce((s,l)=>s+l.qty,0);$('tPacks').textContent=tot;$('tLines').textContent=lines.length;$('tProd').textContent=new Set(lines.map(l=>l.barcode||l.prcode)).size;
+  $('empty').hidden=!!lines.length;$('xlsBtn').disabled=!lines.length;$('clrAll').disabled=!lines.length;
+  $('list').innerHTML=lines.slice().sort((a,b)=>String(b.at).localeCompare(String(a.at))).map(l=>`<div class="item"><span class="nm">${esc(l.name)}</span>
+    <span class="meta">${l.prcode?'prcode '+esc(l.prcode)+' · ':''}${esc(l.barcode)}<br>Batch ${esc(l.batch)} · Exp ${esc(l.expiry)}</span>
+    <span class="cnt"><button data-k="${esc(l.key)}" data-d="-1" aria-label="One less">−</button><b>${l.qty}</b><button data-k="${esc(l.key)}" data-d="1" aria-label="One more">+</button></span>
+    <button class="del" data-del="${esc(l.key)}">Delete line</button></div>`).join('');
+}
+$('list').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.del!==undefined){lines=lines.filter(l=>l.key!==b.dataset.del)}
+  else if(b.dataset.k!==undefined){const l=lines.find(x=>x.key===b.dataset.k);if(l){l.qty+=+b.dataset.d;if(l.qty<1)lines=lines.filter(x=>x!==l)}}
+  S.set('pk_lines',lines);render()});
+$('clrAll').onclick=()=>$('clrConfirm').hidden=false;$('clrNo').onclick=()=>$('clrConfirm').hidden=true;
+$('clrYes').onclick=()=>{lines=[];S.set('pk_lines',lines);$('clrConfirm').hidden=true;render()};
+$('xlsBtn').onclick=()=>{
+  const head=['Product name','AMSP prcode','Barcode','Batch','Expiry','MFG','Qty','Last added'];
+  const data=lines.map(l=>[l.name,l.prcode,l.barcode,l.batch,l.expiry,l.mfg||'',l.qty,new Date(l.at).toLocaleString('en-GB')]);
+  const ws=XLSX.utils.aoa_to_sheet([head,...data,[],['TOTAL','','','','','',lines.reduce((s,l)=>s+l.qty,0)]]);
+  data.forEach((r,i)=>[1,2,3,4,5].forEach(j=>{const a=XLSX.utils.encode_cell({r:i+1,c:j});if(ws[a]){ws[a].t='s';ws[a].v=String(ws[a].v)}}));
+  ws['!cols']=[{wch:36},{wch:10},{wch:16},{wch:12},{wch:10},{wch:10},{wch:6},{wch:20}];
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Pack count');
+  const d=new Date(),st=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+'_'+String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0');
+  XLSX.writeFile(wb,'Pack_Count_'+st+'.xlsx');
+};
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&stream)camOff()});
+render();fill();loadProducts();
+</script>
+</body>
+</html>

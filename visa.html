@@ -14,7 +14,7 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body)
 .wrap{max-width:820px;margin:0 auto;padding:max(12px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) 40px max(14px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:12px}
 h1{font:800 1.15rem var(--display);margin:0}
 h2{font:700 1rem var(--display);margin:0}
-.nav{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px}
+.nav{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px}
 .nav a{color:var(--muted);text-decoration:none;font:600 .9rem var(--body);padding:10px 6px;border-radius:9px;text-align:center}
 .nav a.on{background:var(--accent);color:var(--accent-ink)}
 .btn{appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:600 .95rem var(--body);padding:12px 14px;border-radius:10px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
@@ -49,13 +49,26 @@ td button{border:0;background:none;color:var(--bad);font:600 .8rem var(--body);c
 .empty{border:1px dashed var(--line);border-radius:12px;padding:16px;color:var(--muted);text-align:center}
 .confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .note{font-size:.82rem;color:var(--muted);margin:0}
+.setup{border-color:var(--accent)}
+.up{font:600 .74rem var(--body)} .up.ok{color:var(--accent)} .up.wait{color:var(--warn)}
+.f.agent input{border-color:var(--accent)}
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>NSH Visa Medical</h1>
-  <nav class="nav"><a href="./#count">Count boxes</a><a href="./#map">Map products</a><a class="on" href="visa.html">Visa medical</a></nav>
+  <nav class="nav"><a href="./#count">Count</a><a href="./#map">Map</a><a class="on" href="visa.html">Visa</a><a href="pack.html">Pack scan</a></nav>
 
+  <section class="panel setup" id="setupPanel" hidden>
+    <h2>Set up this phone (once)</h2>
+    <div class="fields">
+      <div class="f"><label for="setName">Your name</label><input id="setName" autocomplete="name" placeholder="e.g. Vipin"></div>
+      <div class="f"><label for="setPin">Team PIN</label><input id="setPin" inputmode="numeric" autocomplete="off" placeholder="from the office"></div>
+    </div>
+    <div class="row"><button class="btn primary" id="setSave">Save and connect</button></div>
+    <p class="status" id="setMsg"></p>
+  </section>
+  <div class="row" id="syncRow" style="justify-content:space-between"><span class="status" id="syncMsg"></span><button class="btn" id="syncBtn" hidden>Upload now</button><button class="btn" id="setupBtn">Phone setup</button></div>
   <p class="note">Photograph the full payment slip, flat and in good light. The QR and the printed details are read on this phone. Check the highlighted fields, then save.</p>
   <div class="row">
     <label class="btn primary" for="cam">Photograph slip</label>
@@ -88,7 +101,7 @@ td button{border:0;background:none;color:var(--bad);font:600 .8rem var(--body);c
   <div class="confirm" id="clearConfirm" hidden><span>Delete all saved slips?</span><button class="btn danger" id="clearYes">Delete all</button><button class="btn" id="clearNo">Keep</button></div>
   <div class="empty" id="empty">No slips saved yet.</div>
   <div class="tablewrap" id="tableWrap" hidden><table><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
-  <p class="note">Slips are kept on this phone until you delete them. Save Excel to send them to the office. The first slip takes longer while the text reader downloads (about 5 MB, once).</p>
+  <p class="note">Each saved slip uploads to the office sheet automatically. If there is no internet it waits and uploads later. The first slip takes longer while the text reader downloads (about 5 MB, once).</p>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.4/dist/iife/reader/index.js"></script>
@@ -176,14 +189,14 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 const S={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 let rows=S.get('vm_rows',[]); let pending=null;
 
-const FIELDS=[['request_no','Request no (QR)'],['name_en','Name (English)'],['name_ar','Name (Arabic)','ar'],['civil_no','Civil no'],['passport_no','Passport no'],
+const FIELDS=[['agent_code','Agent code','agent'],['agent_name','Agent name','agent'],['request_no','Request no (QR)'],['name_en','Name (English)'],['name_ar','Name (Arabic)','ar'],['civil_no','Civil no'],['passport_no','Passport no'],
  ['bank_ref_1','Bank ref (POS)'],['bank_ref_2','Bank ref (number)'],['transaction_ref','Transaction ref'],['amount','Amount'],['currency','Currency'],
  ['status','Payment status'],['card_masked','Card (masked)'],['approval_code','Approval code'],['commission','Commission OMR'],['notes','Notes']];
-const CHECK={request_no:v=>!!v||'QR not read. Retake closer, or type it.',name_en:v=>/^[A-Z][A-Z .'-]+$/.test(v)||'Check name',civil_no:v=>/^\d{7,10}$/.test(v)||'Civil no should be 8–9 digits',
+const CHECK={agent_code:v=>!!v||'Choose the agent',agent_name:v=>!!v||'Agent name needed',request_no:v=>!!v||'QR not read. Retake closer, or type it.',name_en:v=>/^[A-Z][A-Z .'-]+$/.test(v)||'Check name',civil_no:v=>/^\d{7,10}$/.test(v)||'Civil no should be 8–9 digits',
  passport_no:v=>/^[A-Z0-9]{6,10}$/.test(v)||'Check passport no',bank_ref_1:v=>/^POS[A-Z0-9]{8,}$/.test(v)||'Check bank ref',bank_ref_2:v=>/^\d{12,20}$/.test(v)||'Check bank ref',
  transaction_ref:v=>/^\d{10,14}$/.test(v)||'Check transaction ref',amount:v=>/^\d+(\.\d{1,3})?$/.test(v)||'Amount missing',status:v=>/CAPTURED/i.test(v)||'Payment not shown as CAPTURED',
  card_masked:v=>/^\d{4}\*{6}\d{6}$/.test(v)||'Check last digits of card',approval_code:v=>/^\d{5,8}$/.test(v)||'Check approval code'};
-const REQUIRED=['request_no','name_en','passport_no','amount'];
+const REQUIRED=['agent_code','agent_name','request_no','name_en','passport_no','amount'];
 
 // ---------- readers ----------
 let qrReady=null, ocrWorker=null;
@@ -230,7 +243,7 @@ async function handle(file){
     const {fields,conf}=await visaExtract(w,big,big.width,big.height);
     prog('',1);
     const r={}; for(const [k] of FIELDS) r[k]=fields[k]||'';
-    r.request_no=qr; r.currency=r.currency||'OMR'; r.commission=String(S.get('vm_comm','')||'');
+    r.request_no=qr; r.currency=r.currency||'OMR'; r.agent_code=''; r.agent_name=''; r.commission=String(S.get('vm_comm','')||'');
     pending={r,conf}; showReview();
   }catch(e){ console.error(e); progErr('Could not read this photo. Check the internet connection for the first use, then try again.'); }
 }
@@ -240,7 +253,7 @@ $('gal').onchange=e=>{handle(e.target.files[0]);e.target.value=''};
 function showReview(){
   const {r}=pending;
   $('qrLine').innerHTML=r.request_no?`<span class="chip ok">QR read</span> <span>Request no <b style="font-family:var(--mono)">${esc(r.request_no)}</b></span>`:`<span class="chip bad">QR not read</span> <span>Retake closer to the QR, or type the request no.</span>`;
-  $('fields').innerHTML=FIELDS.map(([k,l,cls])=>`<div class="f"><label for="f_${k}">${esc(l)}</label><input id="f_${k}" data-k="${k}" class="${cls||''}" value="${esc(r[k])}" autocomplete="off" ${k==='amount'||k==='commission'?'inputmode="decimal"':''}><span class="hint" id="h_${k}"></span></div>`).join('');
+  $('fields').innerHTML=`<datalist id="agentCodes">${agents.map(a=>`<option value="${esc(a.code)}">${esc(a.name)}</option>`).join('')}</datalist><datalist id="agentNames">${agents.map(a=>`<option value="${esc(a.name)}">${esc(a.code)}</option>`).join('')}</datalist>`+FIELDS.map(([k,l,cls])=>`<div class="f"><label for="f_${k}">${esc(l)}</label><input id="f_${k}" data-k="${k}" class="${cls||''}" value="${esc(r[k])}" autocomplete="off" ${k==='agent_code'?'list="agentCodes"':k==='agent_name'?'list="agentNames"':''} ${k==='amount'||k==='commission'?'inputmode="decimal"':''}><span class="hint" id="h_${k}"></span></div>`).join('');
   validate(); $('review').hidden=false; $('review').scrollIntoView({behavior:'smooth',block:'start'});
 }
 function validate(){
@@ -253,34 +266,71 @@ function validate(){
   $('saveBtn').disabled=blocked||!!dup;
 }
 $('fields').addEventListener('input',e=>{const k=e.target.dataset.k;if(!k)return;let v=e.target.value;if(!['name_ar','notes'].includes(k))v=v.trim();if(['passport_no','name_en','bank_ref_1'].includes(k))v=v.toUpperCase();
-  pending.r[k]=v;if(pending.conf)delete pending.conf[k];if(k==='commission')S.set('vm_comm',v);validate()});
+  if(k==='agent_code')v=v.toUpperCase();
+  pending.r[k]=v;if(pending.conf)delete pending.conf[k];if(k==='commission')S.set('vm_comm',v);
+  if(k==='agent_code'){const a=agents.find(a=>a.code.toUpperCase()===v);if(a){pending.r.agent_name=a.name;$('f_agent_name').value=a.name}}
+  if(k==='agent_name'){const a=agents.find(a=>a.name.toUpperCase()===v.toUpperCase());if(a){pending.r.agent_code=a.code;$('f_agent_code').value=a.code}}
+  validate()});
 $('discardBtn').onclick=()=>{pending=null;$('review').hidden=true;prog('')};
-$('saveBtn').onclick=()=>{if(!pending)return;rows.push({...pending.r,saved_at:new Date().toISOString()});S.set('vm_rows',rows);pending=null;$('review').hidden=true;render();prog('Saved',1);setTimeout(()=>prog(''),1500)};
+$('saveBtn').onclick=()=>{if(!pending)return;rows.push({...pending.r,uploaded_by:cfg.name||'',saved_at:new Date().toISOString(),uploaded:false});S.set('vm_rows',rows);pending=null;$('review').hidden=true;render();prog('Saved',1);setTimeout(()=>prog(''),1500);sync()};
 
-const COLS=[['request_no','Request no'],['name_en','Name (EN)'],['name_ar','Name (AR)'],['civil_no','Civil no'],['passport_no','Passport no'],['amount','Amount'],['currency','Currency'],['commission','Commission'],
- ['status','Status'],['transaction_ref','Transaction ref'],['bank_ref_1','Bank ref (POS)'],['bank_ref_2','Bank ref (no.)'],['card_masked','Card'],['approval_code','Approval code'],['notes','Notes'],['saved_at','Saved at']];
+// ---------- upload to office sheet ----------
+const API='/*API_URL*/';
+let cfg=S.get('vm_cfg',{name:'',pin:''}); let agents=S.get('vm_agents',[]); let syncing=false;
+function showSetup(open){$('setupPanel').hidden=!open;$('setName').value=cfg.name||'';$('setPin').value=cfg.pin||''}
+$('setupBtn').onclick=()=>showSetup($('setupPanel').hidden);
+async function api(params){const u=API+'?'+new URLSearchParams(params);const r=await fetch(u);return r.json()}
+async function loadAgents(){try{const j=await api({pin:cfg.pin,action:'agents'});if(j.ok){agents=j.agents||[];S.set('vm_agents',agents);return true}if(j.error==='bad_pin')return 'pin'}catch(e){}return false}
+$('setSave').onclick=async()=>{cfg={name:$('setName').value.trim(),pin:$('setPin').value.trim()};
+  if(!cfg.name||!cfg.pin){$('setMsg').textContent='Enter your name and the team PIN.';return}
+  $('setMsg').textContent='Connecting…';const ok=await loadAgents();
+  if(ok===true){S.set('vm_cfg',cfg);$('setMsg').textContent='Connected. '+agents.length+' agents loaded.';setTimeout(()=>showSetup(false),900);sync()}
+  else $('setMsg').textContent=ok==='pin'?'Wrong team PIN.':'Could not reach the office sheet. Check internet and try again.'};
+async function sync(){
+  const waiting=rows.filter(r=>!r.uploaded);
+  if(!cfg.pin){$('syncMsg').innerHTML='<span class="up wait">Phone not set up. Slips stay on this phone.</span>';$('syncBtn').hidden=true;return}
+  if(syncing)return; syncing=true;
+  for(const r of waiting){
+    try{const res=await fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({pin:cfg.pin,row:r})});const j=await res.json();
+      if(j.ok){r.uploaded=true;S.set('vm_rows',rows)}else if(j.error==='bad_pin'){break}}catch(e){break}
+  }
+  syncing=false; render(); loadAgents();
+}
+function syncLine(){const w=rows.filter(r=>!r.uploaded).length;
+  $('syncMsg').innerHTML=!cfg.pin?'<span class="up wait">Phone not set up. Tap Phone setup.</span>':w?`<span class="up wait">${w} slip${w>1?'s':''} waiting to upload</span>`:'<span class="up ok">All slips uploaded to office</span>';
+  $('syncBtn').hidden=!w||!cfg.pin;}
+$('syncBtn').onclick=sync;
+window.addEventListener('online',sync);
+
+const COLS=[['uploaded','Uploaded'],['agent_code','Agent code'],['agent_name','Agent name'],['request_no','Request no'],['name_en','Name (EN)'],['name_ar','Name (AR)'],['civil_no','Civil no'],['passport_no','Passport no'],['amount','Amount'],['currency','Currency'],['commission','Commission'],
+ ['status','Status'],['transaction_ref','Transaction ref'],['bank_ref_1','Bank ref (POS)'],['bank_ref_2','Bank ref (no.)'],['card_masked','Card'],['approval_code','Approval code'],['notes','Notes'],['uploaded_by','Entered by'],['saved_at','Saved at']];
 const num=v=>{const n=parseFloat(v);return isNaN(n)?0:n};
 const fmt=s=>{try{const d=new Date(s);return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})+' '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}catch(e){return s}};
 function render(){
   $('tCount').textContent=rows.length;$('tFee').textContent=rows.reduce((s,r)=>s+num(r.amount),0).toFixed(3);$('tCom').textContent=rows.reduce((s,r)=>s+num(r.commission),0).toFixed(3);
   $('empty').hidden=!!rows.length;$('tableWrap').hidden=!rows.length;$('xlsBtn').disabled=!rows.length;$('clearBtn').disabled=!rows.length;
+  syncLine();
   $('thead').innerHTML='<tr>'+COLS.map(c=>`<th>${c[1]}</th>`).join('')+'<th></th></tr>';
-  $('tbody').innerHTML=rows.slice().reverse().map(r=>'<tr>'+COLS.map(([k])=>`<td ${k==='name_ar'?'dir="rtl"':''}>${esc(k==='saved_at'?fmt(r[k]):r[k])}</td>`).join('')+`<td><button data-id="${esc(r.saved_at)}">Delete</button></td></tr>`).join('');
+  $('tbody').innerHTML=rows.slice().reverse().map(r=>'<tr>'+COLS.map(([k])=>`<td ${k==='name_ar'?'dir="rtl"':''}>${k==='uploaded'?(r.uploaded?'<span class="up ok">✓</span>':'<span class="up wait">waiting</span>'):esc(k==='saved_at'?fmt(r[k]):r[k])}</td>`).join('')+`<td><button data-id="${esc(r.saved_at)}">Delete</button></td></tr>`).join('');
 }
 $('tbody').addEventListener('click',e=>{const b=e.target.closest('button[data-id]');if(!b)return;rows=rows.filter(r=>r.saved_at!==b.dataset.id);S.set('vm_rows',rows);render()});
 $('clearBtn').onclick=()=>$('clearConfirm').hidden=false;$('clearNo').onclick=()=>$('clearConfirm').hidden=true;
 $('clearYes').onclick=()=>{rows=[];S.set('vm_rows',rows);$('clearConfirm').hidden=true;render()};
 $('xlsBtn').onclick=()=>{
-  const data=rows.map(r=>COLS.map(([k])=>k==='amount'||k==='commission'?(r[k]===''?'':num(r[k])):k==='saved_at'?fmt(r[k]):String(r[k]??'')));
+  const data=rows.map(r=>COLS.map(([k])=>k==='uploaded'?(r.uploaded?'Yes':'No'):k==='amount'||k==='commission'?(r[k]===''?'':num(r[k])):k==='saved_at'?fmt(r[k]):String(r[k]??'')));
   const tot=COLS.map(([k])=>k==='request_no'?'TOTAL':k==='amount'?rows.reduce((s,r)=>s+num(r.amount),0):k==='commission'?rows.reduce((s,r)=>s+num(r.commission),0):'');
   const ws=XLSX.utils.aoa_to_sheet([COLS.map(c=>c[1]),...data,[],tot]);
   data.forEach((row,i)=>COLS.forEach(([k],j)=>{if(k!=='amount'&&k!=='commission'){const a=XLSX.utils.encode_cell({r:i+1,c:j});if(ws[a]){ws[a].t='s';ws[a].v=String(ws[a].v)}}}));
   ws['!cols']=COLS.map(([k])=>({wch:/name/.test(k)?24:/ref/.test(k)?22:14}));
-  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Visa Medical');
+  const by={};rows.forEach(r=>{const k=r.agent_code||'(no agent)';by[k]=by[k]||{n:r.agent_name||'',c:0,a:0,m:0};by[k].c++;by[k].a+=num(r.amount);by[k].m+=num(r.commission)});
+  const sum=[['Agent code','Agent name','Patients','Fees (OMR)','Commission (OMR)'],...Object.keys(by).sort().map(k=>[k,by[k].n,by[k].c,by[k].a,by[k].m]),['TOTAL','',rows.length,rows.reduce((s,r)=>s+num(r.amount),0),rows.reduce((s,r)=>s+num(r.commission),0)]];
+  const ws0=XLSX.utils.aoa_to_sheet(sum);ws0['!cols']=[{wch:14},{wch:26},{wch:10},{wch:12},{wch:16}];
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws0,'By agent');XLSX.utils.book_append_sheet(wb,ws,'Visa Medical');
   const d=new Date(),st=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+'_'+String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0');
   XLSX.writeFile(wb,'Visa_Medical_'+st+'.xlsx');
 };
 render();
+if(!cfg.pin)showSetup(true);else{loadAgents();sync()}
 </script>
 </body>
 </html>
