@@ -270,7 +270,7 @@ let cur={name:'',prcode:'',barcode:'',batch:'',expiry:'',mfg:''}, unsure={};
 toCanvasFn=v=>{const c=document.createElement('canvas');c.width=v.width;c.height=v.height;c.getContext('2d').putImageData(new ImageData(v.data,v.width,v.height),0,0);return c};
 let ocrW=null; async function ocr(){ if(!ocrW){status('Loading text reader (first time downloads ~4 MB)…');ocrW=await Tesseract.createWorker('eng',1,TESS_OPTS);} return ocrW; }
 let reader=null, zxReady=null;
-function zx(){ if(!reader){zxReady=fetch('vendor/zxing_reader.wasm?v=1').then(r=>{if(!r.ok)throw new Error('wasm '+r.status);return r.arrayBuffer()}).then(buf=>ZXingWASM.prepareZXingModule({overrides:{wasmBinary:buf},fireImmediately:true}));reader=ZXingWASM.readBarcodes} return reader; }
+function zx(){ if(!reader){zxReady=fetch('vendor/zxing_reader.wasm?v=1').then(r=>{if(!r.ok)throw new Error('wasm '+r.status);return r.arrayBuffer()}).then(buf=>ZXingWASM.prepareZXingModule({overrides:{wasmBinary:buf},fireImmediately:true}));reader=(...args)=>zxReady.then(()=>ZXingWASM.readBarcodes(...args))} return reader; }
 const withTimeout=(p,ms,what)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout: '+what)),ms))]);
 const yieldUI=()=>new Promise(r=>setTimeout(r,0));
 setTimeout(()=>{try{zx()}catch(e){}},300);
